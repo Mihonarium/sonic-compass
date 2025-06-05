@@ -19,16 +19,27 @@ A React Native Expo app that provides compass functionality with background audi
 - GitHub account
 - Expo account (free at expo.dev)
 
-### 1. Clone/Setup Repository
+### 1. Required Assets (Only Images Now)
 
-1. Create a new GitHub repository
-2. Upload these files to your repository
-3. Add required audio files to `assets/` folder:
-   - `beep.mp3` (for direction sounds)
-   - `icon.png` (app icon, 1024x1024)
-   - `splash.png` (splash screen)
-   - `adaptive-icon.png` (Android icon)
-   - `favicon.png` (web favicon)
+You only need these image files in `/assets/` folder:
+- `icon.png` (1024x1024) - App icon
+- `splash.png` - Splash screen 
+- `adaptive-icon.png` - Android icon
+- `favicon.png` - Web favicon
+
+**No audio files needed!** The app generates all sounds programmatically.
+
+### 2. Quick Start with Placeholder Images
+
+Create simple placeholder images or use the Expo defaults:
+
+```bash
+# Create basic assets (or use any square images)
+# icon.png - 1024x1024 square image
+# splash.png - any size, will be resized
+# adaptive-icon.png - 1024x1024 square
+# favicon.png - 32x32 or larger square
+```
 
 ### 2. Configure Expo/EAS Build
 
