@@ -16,7 +16,7 @@
     ],
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.yourname.backgroundcompass",
+      "bundleIdentifier": "ms.contact.compass",
       "backgroundModes": ["audio"],
       "infoPlist": {
         "UIBackgroundModes": ["audio"],
