@@ -14,6 +14,7 @@
     "expo-sensors": "~12.4.0",
     "expo-screen-orientation": "~6.0.0",
     "expo-linear-gradient": "~12.3.0",
+    "expo-file-system": "~15.4.0",
     "react": "18.2.0",
     "react-native": "0.72.3",
     "react-native-svg": "13.9.0"
