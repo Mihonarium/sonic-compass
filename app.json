@@ -1,0 +1,49 @@
+{
+  "expo": {
+    "name": "Background Compass",
+    "slug": "background-compass",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0f1a2b"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.yourname.backgroundcompass",
+      "backgroundModes": ["audio"],
+      "infoPlist": {
+        "UIBackgroundModes": ["audio"],
+        "NSLocationWhenInUseUsageDescription": "This app uses device sensors for compass functionality.",
+        "UIRequiredDeviceCapabilities": ["magnetometer"]
+      },
+      "buildNumber": "1"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FFFFFF"
+      },
+      "permissions": ["VIBRATE"]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "13.0"
+          }
+        }
+      ]
+    ]
+  }
+}
