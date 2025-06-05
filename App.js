@@ -37,6 +37,74 @@ export default function App() {
   // Magnetometer subscription
   const magnetometerSubscription = useRef(null);
 
+  // Generate audio buffer for tones
+  const generateToneBuffer = (frequency, duration, sampleRate = 44100) => {
+    const samples = duration * sampleRate;
+    const buffer = new Float32Array(samples);
+    
+    for (let i = 0; i < samples; i++) {
+      const t = i / sampleRate;
+      // Generate sine wave with fade in/out to prevent clicks
+      const fadeLength = 0.01; // 10ms fade
+      let amplitude = 1;
+      
+      if (t < fadeLength) {
+        amplitude = t / fadeLength;
+      } else if (t > duration - fadeLength) {
+        amplitude = (duration - t) / fadeLength;
+      }
+      
+      buffer[i] = amplitude * Math.sin(2 * Math.PI * frequency * t);
+    }
+    
+    return buffer;
+  };
+
+  // Convert audio buffer to base64 data URI (WAV format)
+  const audioBufferToWav = (buffer, sampleRate = 44100) => {
+    const length = buffer.length;
+    const arrayBuffer = new ArrayBuffer(44 + length * 2);
+    const view = new DataView(arrayBuffer);
+    
+    // WAV header
+    const writeString = (offset, string) => {
+      for (let i = 0; i < string.length; i++) {
+        view.setUint8(offset + i, string.charCodeAt(i));
+      }
+    };
+    
+    writeString(0, 'RIFF');
+    view.setUint32(4, 36 + length * 2, true);
+    writeString(8, 'WAVE');
+    writeString(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, 1, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * 2, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    writeString(36, 'data');
+    view.setUint32(40, length * 2, true);
+    
+    // Convert float samples to 16-bit PCM
+    let offset = 44;
+    for (let i = 0; i < length; i++) {
+      const sample = Math.max(-1, Math.min(1, buffer[i]));
+      view.setInt16(offset, sample * 0x7FFF, true);
+      offset += 2;
+    }
+    
+    // Convert to base64
+    const bytes = new Uint8Array(arrayBuffer);
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    
+    return `data:audio/wav;base64,${btoa(binary)}`;
+  };
+
   // Initialize audio system
   const initializeAudio = async () => {
     try {
@@ -51,9 +119,12 @@ export default function App() {
         interruptionModeAndroid: Audio.INTERRUPTION_MODE_ANDROID_DUCK_OTHERS,
       });
 
-      // Create north notification sound
+      // Generate north notification sound (A5 - 880Hz for 300ms)
+      const northBuffer = generateToneBuffer(880, 0.3);
+      const northWav = audioBufferToWav(northBuffer);
+      
       const { sound: northAudio } = await Audio.Sound.createAsync(
-        { uri: generateTone(880, 0.3) }, // A5 for 300ms
+        { uri: northWav },
         { 
           shouldPlay: false,
           isLooping: false,
@@ -62,9 +133,12 @@ export default function App() {
       );
       northSound.current = northAudio;
 
-      // Create direction sound (will be positioned with pan)
+      // Generate direction sound (A4 - 440Hz for 200ms)
+      const directionBuffer = generateToneBuffer(440, 0.2);
+      const directionWav = audioBufferToWav(directionBuffer);
+      
       const { sound: dirAudio } = await Audio.Sound.createAsync(
-        { uri: generateTone(440, 0.2) }, // A4 for 200ms
+        { uri: directionWav },
         { 
           shouldPlay: false,
           isLooping: false,
@@ -73,18 +147,11 @@ export default function App() {
       );
       directionSound.current = dirAudio;
 
-      console.log('Audio initialized successfully');
+      console.log('Audio initialized with generated tones');
     } catch (error) {
       console.error('Failed to initialize audio:', error);
       Alert.alert('Audio Error', 'Failed to initialize audio system');
     }
-  };
-
-  // Generate simple sine wave tone
-  const generateTone = (frequency, duration) => {
-    // This is a placeholder - in a real app, you'd include actual audio files
-    // For now, we'll use system sounds as fallback
-    return require('./assets/beep.mp3'); // You'll need to add audio files
   };
 
   // Start magnetometer
