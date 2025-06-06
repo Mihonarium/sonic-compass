@@ -1,528 +1,631 @@
+// File: App.js
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  StyleSheet,
-  Text,
-  View,
-  Switch,
-  Alert,
-  AppState,
-  Dimensions
+  StyleSheet, View, Text, TouchableOpacity,
+  Alert, AppState, Dimensions
 } from 'react-native';
-import { Picker } from '@react-native-picker/picker';
-import { Audio } from 'expo-av';
-import { Magnetometer } from 'expo-sensors';
+import { Audio, InterruptionModeIOS, InterruptionModeAndroid } from 'expo-av';
+import CompassHeading from 'react-native-compass-heading';
+import * as FileSystem from 'expo-file-system';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Circle, Line, Text as SvgText, G } from 'react-native-svg';
+import Svg, { Circle, Line, Text as SvgText, G, Defs, RadialGradient, Stop, Polygon } from 'react-native-svg';
+import { Buffer } from 'buffer';
 
-const { width, height } = Dimensions.get('window');
+const { width: screenWidth } = Dimensions.get('window');
 
+////////////////////////////////////////////////////////////////////////////////
+// 1. STATIC CONFIGURATION //////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+const FREQ_OPTS = [
+  { label: 'Off', value: 0 },
+  { label: '0.5s', value: 500 },
+  { label: '1s', value: 1000 },
+  { label: '2s', value: 2000 },
+  { label: '5s', value: 5000 },
+  { label: '10s', value: 10000 },
+  { label: '20s', value: 20000 },
+  { label: '30s', value: 30000 },
+  { label: '60s', value: 60000 }
+];
+const SAMPLE_RATE = 44100;
+
+////////////////////////////////////////////////////////////////////////////////
+// 2. AUDIO HELPERS /////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+const sineBuffer = (freq, durSec, panValue = 0) => {
+  const frames = durSec * SAMPLE_RATE;
+  const buf = new Float32Array(frames * 2); // Stereo
+  
+  for (let i = 0; i < frames; i++) {
+    const t = i / SAMPLE_RATE;
+    const fade = Math.min(1, t / 0.02, (durSec - t) / 0.02); // 20ms fade
+    const sample = fade * Math.sin(2 * Math.PI * freq * t) * 0.3; // Lower volume
+    
+    // Apply stereo panning
+    const leftGain = Math.cos((panValue + 1) * Math.PI / 4);
+    const rightGain = Math.sin((panValue + 1) * Math.PI / 4);
+    
+    buf[i * 2] = sample * leftGain;     // Left channel
+    buf[i * 2 + 1] = sample * rightGain; // Right channel
+  }
+  return buf;
+};
+
+const pcm16Stereo = float32 => {
+  const out = new Int16Array(float32.length);
+  for (let i = 0; i < float32.length; i++) {
+    out[i] = Math.max(-1, Math.min(1, float32[i])) * 0x7FFF;
+  }
+  return out;
+};
+
+const makeWavBytesStereo = floatBuf => {
+  const pcm = pcm16Stereo(floatBuf);
+  const byteLen = 44 + pcm.length * 2;
+  const dv = new DataView(new ArrayBuffer(byteLen));
+  let o = 0;
+  const str = s => { for (let i = 0; i < s.length; i++) dv.setUint8(o++, s.charCodeAt(i)); };
+
+  str('RIFF'); dv.setUint32(o, byteLen - 8, true); o += 4;
+  str('WAVEfmt '); dv.setUint32(o, 16, true); o += 4;
+  dv.setUint16(o, 1, true); o += 2; // PCM
+  dv.setUint16(o, 2, true); o += 2; // Stereo
+  dv.setUint32(o, SAMPLE_RATE, true); o += 4;
+  dv.setUint32(o, SAMPLE_RATE * 4, true); o += 4; // byte rate for stereo 16-bit
+  dv.setUint16(o, 4, true); o += 2; // block align for stereo 16-bit
+  dv.setUint16(o, 16, true); o += 2; // bits per sample
+  str('data'); dv.setUint32(o, pcm.length * 2, true); o += 4;
+  new Uint8Array(dv.buffer).set(new Uint8Array(pcm.buffer), 44);
+  return new Uint8Array(dv.buffer);
+};
+
+const writeWav = async (name, floatBuf) => {
+  const b64 = Buffer.from(makeWavBytesStereo(floatBuf)).toString('base64');
+  const uri = FileSystem.cacheDirectory + name;
+  await FileSystem.writeAsStringAsync(uri, b64, { encoding: FileSystem.EncodingType.Base64 });
+  return uri;
+};
+
+////////////////////////////////////////////////////////////////////////////////
+// 3. MAIN COMPONENT ////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
 export default function App() {
-  // State management
+  // ----- STATE ---------------------------------------------------------------
   const [heading, setHeading] = useState(0);
-  const [isActive, setIsActive] = useState(false);
-  const [frequency, setFrequency] = useState(1000);
-  const [isFacingNorth, setIsFacingNorth] = useState(false);
-  const [lastDirectionSound, setLastDirectionSound] = useState(0);
-  
-  // Audio refs
+  const [freq, setFreq] = useState(1000);
+  const [north, setNorth] = useState(false);
+  const [lastDir, setLastDir] = useState(0);
+  const [status, setStatus] = useState('Initializing...');
+
+  // ----- REFS ----------------------------------------------------------------
+  const rotRef = useRef(0);
   const northSound = useRef(null);
-  const directionSound = useRef(null);
-  const audioContext = useRef(null);
-  
-  // Compass rotation tracking
-  const displayRotation = useRef(0);
-  const previousHeading = useRef(0);
-  
-  // Magnetometer subscription
-  const magnetometerSubscription = useRef(null);
+  const dirSounds = useRef({});
+  const lastDirectionalSoundTime = useRef(0);
+  const directionSoundInterval = useRef(null);
+  const currentHeading = useRef(0);
+  const northSoundPlaying = useRef(false); // Track if north sound is currently playing
+  const pulseTimeout = useRef(null); // Track pulse fade timeout
 
-  // Generate audio buffer for tones
-  const generateToneBuffer = (frequency, duration, sampleRate = 44100) => {
-    const samples = duration * sampleRate;
-    const buffer = new Float32Array(samples);
-    
-    for (let i = 0; i < samples; i++) {
-      const t = i / sampleRate;
-      // Generate sine wave with fade in/out to prevent clicks
-      const fadeLength = 0.01; // 10ms fade
-      let amplitude = 1;
-      
-      if (t < fadeLength) {
-        amplitude = t / fadeLength;
-      } else if (t > duration - fadeLength) {
-        amplitude = (duration - t) / fadeLength;
-      }
-      
-      buffer[i] = amplitude * Math.sin(2 * Math.PI * frequency * t);
-    }
-    
-    return buffer;
-  };
-
-  // Convert audio buffer to base64 data URI (WAV format)
-  const audioBufferToWav = (buffer, sampleRate = 44100) => {
-    const length = buffer.length;
-    const arrayBuffer = new ArrayBuffer(44 + length * 2);
-    const view = new DataView(arrayBuffer);
-    
-    // WAV header
-    const writeString = (offset, string) => {
-      for (let i = 0; i < string.length; i++) {
-        view.setUint8(offset + i, string.charCodeAt(i));
-      }
-    };
-    
-    writeString(0, 'RIFF');
-    view.setUint32(4, 36 + length * 2, true);
-    writeString(8, 'WAVE');
-    writeString(12, 'fmt ');
-    view.setUint32(16, 16, true);
-    view.setUint16(20, 1, true);
-    view.setUint16(22, 1, true);
-    view.setUint32(24, sampleRate, true);
-    view.setUint32(28, sampleRate * 2, true);
-    view.setUint16(32, 2, true);
-    view.setUint16(34, 16, true);
-    writeString(36, 'data');
-    view.setUint32(40, length * 2, true);
-    
-    // Convert float samples to 16-bit PCM
-    let offset = 44;
-    for (let i = 0; i < length; i++) {
-      const sample = Math.max(-1, Math.min(1, buffer[i]));
-      view.setInt16(offset, sample * 0x7FFF, true);
-      offset += 2;
-    }
-    
-    // Convert to base64
-    const bytes = new Uint8Array(arrayBuffer);
-    let binary = '';
-    for (let i = 0; i < bytes.length; i++) {
-      binary += String.fromCharCode(bytes[i]);
-    }
-    
-    return `data:audio/wav;base64,${btoa(binary)}`;
-  };
-
-  // Initialize audio system
-  const initializeAudio = async () => {
+  // ----- AUDIO FUNCTIONS -----------------------------------------------------
+  const initAudio = async () => {
     try {
-      // Configure audio for background playback
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: false,
         staysActiveInBackground: true,
         playsInSilentModeIOS: true,
+        interruptionModeIOS: InterruptionModeIOS.MixWithOthers,
+        interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
         shouldDuckAndroid: false,
         playThroughEarpieceAndroid: false,
-        interruptionModeIOS: Audio.INTERRUPTION_MODE_IOS_MIX_WITH_OTHERS,
-        interruptionModeAndroid: Audio.INTERRUPTION_MODE_ANDROID_DUCK_OTHERS,
       });
 
-      // Generate north notification sound (A5 - 880Hz for 300ms)
-      const northBuffer = generateToneBuffer(880, 0.3);
-      const northWav = audioBufferToWav(northBuffer);
-      
-      const { sound: northAudio } = await Audio.Sound.createAsync(
-        { uri: northWav },
-        { 
-          shouldPlay: false,
-          isLooping: false,
-          volume: 0.3
-        }
-      );
-      northSound.current = northAudio;
+      // Create north sound (mono)
+      const northURI = await writeWav('north.wav', sineBuffer(880, 0.3));
+      northSound.current = (await Audio.Sound.createAsync(
+        { uri: northURI }, 
+        { shouldPlay: false, volume: 0.8 }
+      )).sound;
 
-      // Generate direction sound (A4 - 440Hz for 200ms)
-      const directionBuffer = generateToneBuffer(440, 0.2);
-      const directionWav = audioBufferToWav(directionBuffer);
+      // Create directional sounds with MANY pan values for extremely precise directionality
+      const panValues = [];
+      // Generate 41 pan values from -1.0 to +1.0 in 0.05 increments
+      for (let i = 0; i <= 40; i++) {
+        panValues.push(-1.0 + (i * 0.05));
+      }
+      // Result: [-1.0, -0.95, -0.9, -0.85, ..., 0.85, 0.9, 0.95, 1.0]
       
-      const { sound: dirAudio } = await Audio.Sound.createAsync(
-        { uri: directionWav },
-        { 
-          shouldPlay: false,
-          isLooping: false,
-          volume: 0.2
-        }
-      );
-      directionSound.current = dirAudio;
+      for (let i = 0; i < panValues.length; i++) {
+        const panValue = panValues[i];
+        const dirURI = await writeWav(`dir_${i}.wav`, sineBuffer(440, 0.25, panValue));
+        dirSounds.current[i] = (await Audio.Sound.createAsync(
+          { uri: dirURI }, 
+          { shouldPlay: false, volume: 0.7 }
+        )).sound;
+      }
 
-      console.log('Audio initialized with generated tones');
+      // Create silent sound for background activity
+      const silentURI = await writeWav('silent.wav', sineBuffer(0, 0.1));
+      dirSounds.current.silent = (await Audio.Sound.createAsync(
+        { uri: silentURI }, 
+        { shouldPlay: false, volume: 0.01, isLooping: true }
+      )).sound;
+
+      setStatus('Audio initialized');
     } catch (error) {
-      console.error('Failed to initialize audio:', error);
-      Alert.alert('Audio Error', 'Failed to initialize audio system');
+      console.error('Audio init error:', error);
+      setStatus('Audio init failed');
     }
   };
 
-  // Start magnetometer
-  const startMagnetometer = () => {
-    if (magnetometerSubscription.current) {
-      magnetometerSubscription.current.remove();
+  const playNorth = async () => {
+    try {
+      // Only play if not already playing
+      if (!northSoundPlaying.current) {
+        northSoundPlaying.current = true;
+        await northSound.current?.replayAsync();
+        
+        // Reset flag after sound duration (300ms for north sound)
+        setTimeout(() => {
+          northSoundPlaying.current = false;
+        }, 300);
+      }
+    } catch (error) {
+      console.error('North sound error:', error);
+      northSoundPlaying.current = false;
     }
+  };
 
-    Magnetometer.setUpdateInterval(100); // 10Hz updates
-
-    magnetometerSubscription.current = Magnetometer.addListener((data) => {
-      const { x, y, z } = data;
+  const playDir = async (panValue) => {
+    try {
+      const correctedPan = -panValue; // Invert for correct left/right
       
-      // Calculate heading from magnetometer data
-      let calculatedHeading = Math.atan2(y, x) * (180 / Math.PI);
-      calculatedHeading = (calculatedHeading + 360) % 360;
+      // Map pan value (-1 to 1) to sound index (0 to 40) for 41 different positions
+      const index = Math.round((correctedPan + 1) * 20); // Maps -1->0, 0->20, 1->40
+      const soundIndex = Math.max(0, Math.min(40, index));
       
-      updateCompass(calculatedHeading);
-    });
-  };
-
-  // Stop magnetometer
-  const stopMagnetometer = () => {
-    if (magnetometerSubscription.current) {
-      magnetometerSubscription.current.remove();
-      magnetometerSubscription.current = null;
+      const sound = dirSounds.current[soundIndex];
+      if (sound) {
+        const status = await sound.getStatusAsync();
+        if (!status?.isPlaying) {
+          await sound.setPositionAsync(0);
+          await sound.playAsync();
+        }
+      }
+    } catch (error) {
+      console.error('Direction sound error:', error);
     }
   };
 
-  // Update compass with smooth rotation
-  const updateCompass = (newHeading) => {
-    // Round to one decimal place
-    newHeading = Math.round(newHeading * 10) / 10;
+  const startSilentSound = async () => {
+    try {
+      const silentSound = dirSounds.current.silent;
+      if (silentSound) {
+        await silentSound.playAsync();
+      }
+    } catch (error) {
+      console.error('Silent sound error:', error);
+    }
+  };
+
+  const stopSilentSound = async () => {
+    try {
+      const silentSound = dirSounds.current.silent;
+      if (silentSound) {
+        await silentSound.stopAsync();
+      }
+    } catch (error) {
+      console.error('Silent sound stop error:', error);
+    }
+  };
+
+  // ----- TIMER FUNCTIONS -----------------------------------------------------
+  const startDirectionSoundTimer = () => {
+    // Clear any existing timer
+    if (directionSoundInterval.current) {
+      clearInterval(directionSoundInterval.current);
+      directionSoundInterval.current = null;
+    }
     
-    // Calculate shortest rotation path
-    let targetRotation = -newHeading;
-    let diff = targetRotation - displayRotation.current;
+    if (freq > 0) {
+      directionSoundInterval.current = setInterval(() => {
+        const hdg = currentHeading.current;
+        const northNow = hdg <= 5 || hdg >= 355;
+        
+        if (!northNow) {
+          const panValue = Math.sin(hdg * Math.PI / 180);
+          playDir(panValue);
+          lastDirectionalSoundTime.current = Date.now();
+          setLastDir(Date.now());
+        }
+      }, freq);
+    }
+  };
+
+  const stopDirectionSoundTimer = () => {
+    if (directionSoundInterval.current) {
+      clearInterval(directionSoundInterval.current);
+      directionSoundInterval.current = null;
+    }
+  };
+
+  // ----- COMPASS FUNCTIONS ---------------------------------------------------
+  const updateCompass = (hdg) => {
+    const roundedHeading = Math.round(hdg * 10) / 10;
+    currentHeading.current = roundedHeading;
     
-    // Normalize difference to shortest path
-    while (diff <= -180) diff += 360;
+    const target = -roundedHeading;
+    let diff = target - rotRef.current;
+    
     while (diff > 180) diff -= 360;
+    while (diff < -180) diff += 360;
     
-    displayRotation.current += diff;
+    rotRef.current += diff;
+    setHeading(roundedHeading);
+
+    const northNow = roundedHeading <= 5 || roundedHeading >= 355;
     
-    // Update state
-    setHeading(newHeading);
-    
-    // Check if facing north (within 5 degrees)
-    const isWithinNorthRange = (newHeading <= 5 || newHeading >= 355);
-    
-    if (isWithinNorthRange) {
-      if (!isFacingNorth) {
-        setIsFacingNorth(true);
-        playNorthSound();
+    if (northNow && !north) {
+      setNorth(true);
+      playNorth();
+      stopSilentSound();
+      
+      // Clear any existing pulse timeout
+      if (pulseTimeout.current) {
+        clearTimeout(pulseTimeout.current);
+        pulseTimeout.current = null;
       }
-    } else {
-      if (isFacingNorth) {
-        setIsFacingNorth(false);
+    } else if (!northNow && north) {
+      // Start timeout to hide pulse after 1 second of not facing north
+      if (!pulseTimeout.current) {
+        pulseTimeout.current = setTimeout(() => {
+          setNorth(false);
+          pulseTimeout.current = null;
+        }, 1000);
       }
       
-      // Play directional sound based on frequency setting
-      if (frequency > 0) {
-        const now = Date.now();
-        if (now - lastDirectionSound > frequency) {
-          playDirectionSound(newHeading);
-          setLastDirectionSound(now);
-        }
+      if (freq > 0) {
+        startSilentSound();
       }
     }
-    
-    previousHeading.current = newHeading;
+
+    if (freq === 0) {
+      stopSilentSound();
+    } else if (!northNow && freq > 0) {
+      const timeSinceLastSound = Date.now() - lastDirectionalSoundTime.current;
+      if (timeSinceLastSound > 1000) {
+        startSilentSound();
+      }
+    }
   };
 
-  // Play north notification sound
-  const playNorthSound = async () => {
+  const startCompass = async () => {
     try {
-      if (northSound.current) {
-        await northSound.current.replayAsync();
-      }
+      setStatus('Starting compass...');
+      
+      CompassHeading.start(1, ({ heading, accuracy }) => {
+        updateCompass(heading);
+      });
+      
+      lastDirectionalSoundTime.current = 0;
+      startDirectionSoundTimer();
+      
+      setStatus('Compass active');
     } catch (error) {
-      console.error('Error playing north sound:', error);
+      throw new Error(`Compass error: ${error.message}`);
     }
   };
 
-  // Play directional sound with stereo positioning
-  const playDirectionSound = async (heading) => {
+  const stopCompass = () => {
+    CompassHeading.stop();
+    stopDirectionSoundTimer();
+    stopSilentSound();
+    setStatus('Compass stopped');
+  };
+
+  // ----- UI FUNCTIONS --------------------------------------------------------
+  const initializeApp = async () => {
     try {
-      if (directionSound.current) {
-        // Calculate pan value (-1 to 1, where -1 is left, 1 is right)
-        const panValue = -Math.sin(heading * Math.PI / 180);
-        
-        // Set pan position
-        await directionSound.current.setPositionAsync(0);
-        await directionSound.current.playAsync();
-        
-        // Note: React Native doesn't have built-in audio panning
-        // You might need expo-audio or react-native-sound for advanced audio features
-      }
+      setStatus('Initializing...');
+      await initAudio();
+      await startCompass();
+      setStatus('Compass active');
     } catch (error) {
-      console.error('Error playing direction sound:', error);
+      console.error('Initialization error:', error);
+      setStatus(`Error: ${error.message}`);
     }
   };
 
-  // Get direction name
-  const getDirectionName = (heading) => {
-    const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
-    const index = Math.round(heading / 45) % 8;
-    return directions[index];
+  const dirTxt = (deg) => {
+    const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+    return dirs[Math.round(deg / 45) % 8];
   };
 
-  // Toggle compass on/off
-  const toggleCompass = async () => {
-    if (!isActive) {
-      // Starting compass
-      await initializeAudio();
-      startMagnetometer();
-      setIsActive(true);
-    } else {
-      // Stopping compass
-      stopMagnetometer();
-      setIsActive(false);
-    }
+  const freqTxt = () => FREQ_OPTS.find(o => o.value === freq)?.label || 'Unknown';
+  
+  const cycle = () => {
+    const currentIndex = FREQ_OPTS.findIndex(o => o.value === freq);
+    const nextIndex = (currentIndex + 1) % FREQ_OPTS.length;
+    const newFreq = FREQ_OPTS[nextIndex].value;
+    setFreq(newFreq);
+    startDirectionSoundTimer(); // Restart timer with new frequency
   };
 
-  // Handle app state changes
-  useEffect(() => {
-    const handleAppStateChange = (nextAppState) => {
-      if (nextAppState === 'background' && isActive) {
-        // App is going to background - keep magnetometer running for audio
-        console.log('App backgrounded, maintaining compass functionality');
-      } else if (nextAppState === 'active' && isActive) {
-        // App is coming to foreground
-        console.log('App foregrounded');
-      }
-    };
-
-    const subscription = AppState.addEventListener('change', handleAppStateChange);
-    return () => subscription?.remove();
-  }, [isActive]);
-
-  // Lock screen orientation to portrait
+  // ----- SIDE-EFFECTS --------------------------------------------------------
   useEffect(() => {
     ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
   }, []);
 
-  // Cleanup on unmount
+  useEffect(() => {
+    initializeApp();
+  }, []);
+
   useEffect(() => {
     return () => {
-      stopMagnetometer();
-      if (northSound.current) {
-        northSound.current.unloadAsync();
+      stopCompass();
+      stopDirectionSoundTimer();
+      stopSilentSound();
+      
+      // Clear pulse timeout
+      if (pulseTimeout.current) {
+        clearTimeout(pulseTimeout.current);
       }
-      if (directionSound.current) {
-        directionSound.current.unloadAsync();
-      }
+      
+      northSound.current?.unloadAsync();
+      Object.values(dirSounds.current).forEach(sound => sound?.unloadAsync());
     };
   }, []);
 
-  // Render compass SVG
-  const renderCompass = () => {
-    const compassSize = 200;
-    const center = compassSize / 2;
-    
-    return (
-      <Svg width={compassSize} height={compassSize} style={styles.compass}>
-        {/* Compass background circle */}
-        <Circle
-          cx={center}
-          cy={center}
-          r={center - 10}
-          fill="none"
-          stroke="#ffffff"
-          strokeWidth="2"
-          opacity="0.3"
-        />
-        
-        {/* Degree marks */}
-        {Array.from({ length: 36 }, (_, i) => {
-          const angle = i * 10;
-          const isMainDirection = angle % 90 === 0;
-          const isSubDirection = angle % 30 === 0;
-          const length = isMainDirection ? 15 : isSubDirection ? 10 : 5;
-          const strokeWidth = isMainDirection ? 2 : 1;
-          
-          const x1 = center + (center - 20) * Math.cos((angle - 90) * Math.PI / 180);
-          const y1 = center + (center - 20) * Math.sin((angle - 90) * Math.PI / 180);
-          const x2 = center + (center - 20 - length) * Math.cos((angle - 90) * Math.PI / 180);
-          const y2 = center + (center - 20 - length) * Math.sin((angle - 90) * Math.PI / 180);
-          
-          return (
-            <Line
-              key={i}
-              x1={x1}
-              y1={y1}
-              x2={x2}
-              y2={y2}
-              stroke="#ffffff"
-              strokeWidth={strokeWidth}
-              opacity="0.6"
-            />
-          );
-        })}
-        
-        {/* Cardinal direction labels */}
-        <SvgText x={center} y={25} textAnchor="middle" fill="#ff5252" fontSize="18" fontWeight="bold">N</SvgText>
-        <SvgText x={compassSize - 15} y={center + 5} textAnchor="middle" fill="#ffffff" fontSize="16">E</SvgText>
-        <SvgText x={center} y={compassSize - 10} textAnchor="middle" fill="#ffffff" fontSize="16">S</SvgText>
-        <SvgText x={15} y={center + 5} textAnchor="middle" fill="#ffffff" fontSize="16">W</SvgText>
-        
-        {/* Compass needle */}
-        <G transform={`rotate(${displayRotation.current} ${center} ${center})`}>
-          <Line
-            x1={center}
-            y1={center}
-            x2={center}
-            y2={30}
-            stroke="#ff5252"
-            strokeWidth="3"
-            strokeLinecap="round"
-          />
-          <Line
-            x1={center}
-            y1={center}
-            x2={center}
-            y2={compassSize - 30}
-            stroke="#cccccc"
-            strokeWidth="3"
-            strokeLinecap="round"
-          />
-        </G>
-        
-        {/* Center pin */}
-        <Circle cx={center} cy={center} r="8" fill="#ffffff" />
-        <Circle cx={center} cy={center} r="4" fill="#333333" />
-      </Svg>
-    );
-  };
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', state => {
+      if (state === 'background') {
+        setStatus('Running in background');
+      } else if (state === 'active') {
+        setStatus('Compass active');
+      }
+    });
+    return () => sub?.remove();
+  }, []);
+
+  // ----- RENDER --------------------------------------------------------------
+  const compassSize = Math.min(screenWidth * 0.8, 300);
+  const radius = compassSize / 2;
 
   return (
     <LinearGradient colors={['#0f1a2b', '#253b56']} style={styles.container}>
+      {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Background Compass</Text>
-        <Switch
-          value={isActive}
-          onValueChange={toggleCompass}
-          trackColor={{ false: '#767577', true: '#81b0ff' }}
-          thumbColor={isActive ? '#f5dd4b' : '#f4f3f4'}
-        />
+        <Text style={styles.title}>North Compass</Text>
       </View>
 
-      <View style={styles.compassContainer}>
-        {renderCompass()}
-        
-        {isFacingNorth && (
-          <View style={[styles.pulse, { opacity: 0.7 }]} />
+      {/* Compass */}
+      <View style={[styles.compassWrap, { width: compassSize, height: compassSize }]}>
+        {north && (
+          <View style={[styles.pulse, { 
+            width: compassSize + 20, 
+            height: compassSize + 20,
+            borderRadius: (compassSize + 20) / 2 
+          }]} />
         )}
+        
+        <Svg width={compassSize} height={compassSize}>
+          <Defs>
+            <RadialGradient id="compassGrad" cx="50%" cy="50%" r="50%">
+              <Stop offset="0%" stopColor="#253b56" />
+              <Stop offset="100%" stopColor="#1a2942" />
+            </RadialGradient>
+            <RadialGradient id="innerGrad" cx="50%" cy="50%" r="50%">
+              <Stop offset="0%" stopColor="#223651" />
+              <Stop offset="100%" stopColor="#172334" />
+            </RadialGradient>
+          </Defs>
+          
+          <G transform={`rotate(${rotRef.current} ${radius} ${radius})`}>
+            <Circle 
+              cx={radius} 
+              cy={radius} 
+              r={radius - 5} 
+              fill="url(#compassGrad)" 
+              stroke="rgba(0, 126, 255, 0.2)" 
+              strokeWidth="2" 
+            />
+            
+            <Circle 
+              cx={radius} 
+              cy={radius} 
+              r={radius - 25} 
+              fill="url(#innerGrad)" 
+              stroke="rgba(255,255,255,0.1)" 
+              strokeWidth="1" 
+            />
+
+            {Array.from({ length: 72 }, (_, i) => {
+              const angle = i * 5;
+              const isMajor = angle % 90 === 0;
+              const isMinor = angle % 30 === 0;
+              const isSmall = angle % 10 === 0;
+              
+              const length = isMajor ? 20 : isMinor ? 15 : isSmall ? 10 : 6;
+              const width = isMajor ? 3 : isMinor ? 2 : 1;
+              const opacity = isMajor ? 1 : isMinor ? 0.8 : isSmall ? 0.6 : 0.4;
+              
+              const outerRadius = radius - 15;
+              const innerRadius = outerRadius - length;
+              const angleRad = (angle - 90) * Math.PI / 180;
+              
+              const x1 = radius + outerRadius * Math.cos(angleRad);
+              const y1 = radius + outerRadius * Math.sin(angleRad);
+              const x2 = radius + innerRadius * Math.cos(angleRad);
+              const y2 = radius + innerRadius * Math.sin(angleRad);
+
+              return (
+                <Line
+                  key={i}
+                  x1={x1} y1={y1} x2={x2} y2={y2}
+                  stroke="#fff"
+                  strokeWidth={width}
+                  opacity={opacity}
+                />
+              );
+            })}
+
+            {/* Cardinal directions - positioned further inside the circle */}
+            <SvgText x={radius} y={50} textAnchor="middle" fill="#ff5252" fontSize="22" fontWeight="bold">N</SvgText>
+            <SvgText x={compassSize - 50} y={radius + 8} textAnchor="middle" fill="#fff" fontSize="20">E</SvgText>
+            <SvgText x={radius} y={compassSize - 35} textAnchor="middle" fill="#fff" fontSize="20">S</SvgText>
+            <SvgText x={50} y={radius + 8} textAnchor="middle" fill="#fff" fontSize="20">W</SvgText>
+          </G>
+
+          {/* Fixed gray arrow pointing up (shows device orientation) */}
+          <G>
+            <Polygon
+              points={`${radius},${30} ${radius-8},${50} ${radius+8},${50}`}
+              fill="#888"
+              stroke="#666"
+              strokeWidth="1"
+            />
+            <Line 
+              x1={radius} y1={50} 
+              x2={radius} y2={compassSize - 60} 
+              stroke="#888" 
+              strokeWidth="3" 
+              strokeLinecap="round" 
+            />
+          </G>
+
+          {/* Red arrow pointing toward north (rotates with compass) */}
+          <G transform={`rotate(${rotRef.current} ${radius} ${radius})`}>
+            <Polygon
+              points={`${radius},${30} ${radius-10},${55} ${radius+10},${55}`}
+              fill="#ff5252"
+              stroke="#cc0000"
+              strokeWidth="2"
+            />
+            <Line 
+              x1={radius} y1={55} 
+              x2={radius} y2={radius + 30} 
+              stroke="#ff5252" 
+              strokeWidth="4" 
+              strokeLinecap="round" 
+            />
+          </G>
+
+          <Circle cx={radius} cy={radius} r="15" fill="#fff" stroke="#333" strokeWidth="2" />
+          <Circle cx={radius} cy={radius} r="8" fill="#333" />
+        </Svg>
       </View>
 
-      <View style={styles.display}>
-        <Text style={styles.degrees}>{heading.toFixed(1)}°</Text>
-        <Text style={styles.direction}>{getDirectionName(heading)}</Text>
+      {/* Readout */}
+      <View style={styles.readout}>
+        <Text style={styles.deg}>{heading.toFixed(1)}°</Text>
+        <Text style={styles.dir}>{dirTxt(heading)}</Text>
       </View>
 
+      {/* Settings */}
       <View style={styles.settings}>
-        <Text style={styles.settingLabel}>Sound Frequency:</Text>
-        <Picker
-          selectedValue={frequency}
-          style={styles.picker}
-          onValueChange={(itemValue) => setFrequency(itemValue)}
-        >
-          <Picker.Item label="Off" value={0} />
-          <Picker.Item label="0.5s" value={500} />
-          <Picker.Item label="1s" value={1000} />
-          <Picker.Item label="2s" value={2000} />
-          <Picker.Item label="5s" value={5000} />
-          <Picker.Item label="10s" value={10000} />
-          <Picker.Item label="20s" value={20000} />
-          <Picker.Item label="30s" value={30000} />
-          <Picker.Item label="60s" value={60000} />
-        </Picker>
+        <Text style={styles.settingLabel}>Direction Sound Frequency</Text>
+        <TouchableOpacity style={styles.freqBtn} onPress={cycle}>
+          <Text style={styles.freqTxt}>{freqTxt()}</Text>
+          <Text style={styles.hint}>tap to change</Text>
+        </TouchableOpacity>
       </View>
 
-      <View style={styles.status}>
-        <Text style={styles.statusText}>
-          {isActive ? 'Compass active - background audio enabled' : 'Tap switch to start compass'}
-        </Text>
-      </View>
+      {/* Status */}
+      <Text style={styles.status}>{status}</Text>
     </LinearGradient>
   );
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// 4. STYLES ////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 50,
+    paddingHorizontal: 20,
   },
   header: {
+    width: '100%',
     flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    width: '90%',
-    marginBottom: 30,
+    marginTop: 60,
+    marginBottom: 20,
   },
   title: {
     fontSize: 24,
+    color: '#fff',
     fontWeight: 'bold',
-    color: '#ffffff',
   },
-  compassContainer: {
+  compassWrap: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginVertical: 30,
+    marginVertical: 20,
     position: 'relative',
-  },
-  compass: {
-    backgroundColor: 'transparent',
   },
   pulse: {
     position: 'absolute',
-    width: 220,
-    height: 220,
-    borderRadius: 110,
-    borderWidth: 2,
+    borderWidth: 3,
     borderColor: '#ff5252',
+    opacity: 0.3,
     backgroundColor: 'transparent',
   },
-  display: {
+  readout: {
     alignItems: 'center',
     marginVertical: 20,
   },
-  degrees: {
+  deg: {
     fontSize: 48,
+    color: '#fff',
     fontWeight: 'bold',
-    color: '#ffffff',
-    textShadowColor: 'rgba(0, 126, 255, 0.5)',
-    textShadowOffset: { width: 0, height: 0 },
+    textShadowColor: 'rgba(0,126,255,0.5)',
     textShadowRadius: 10,
   },
-  direction: {
+  dir: {
     fontSize: 24,
     color: 'rgba(255,255,255,0.8)',
-    marginTop: 10,
+    marginTop: 8,
   },
   settings: {
-    backgroundColor: 'rgba(30, 45, 70, 0.5)',
-    borderRadius: 8,
-    padding: 15,
     width: '90%',
-    marginVertical: 20,
+    padding: 15,
+    backgroundColor: 'rgba(30,45,70,0.5)',
+    borderRadius: 8,
+    alignItems: 'center',
   },
   settingLabel: {
-    color: 'rgba(255,255,255,0.9)',
+    color: '#fff',
     fontSize: 16,
     marginBottom: 10,
   },
-  picker: {
-    color: '#ffffff',
-    backgroundColor: 'rgba(20, 30, 50, 0.8)',
-    borderRadius: 4,
+  freqBtn: {
+    backgroundColor: 'rgba(20,30,50,0.8)',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  freqTxt: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  hint: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 12,
+    marginTop: 2,
   },
   status: {
     position: 'absolute',
-    bottom: 30,
+    bottom: 40,
     width: '90%',
-    alignItems: 'center',
-  },
-  statusText: {
+    textAlign: 'center',
     color: 'rgba(255,255,255,0.7)',
     fontSize: 14,
-    textAlign: 'center',
   },
 });

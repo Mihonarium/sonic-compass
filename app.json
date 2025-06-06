@@ -12,16 +12,28 @@
       "backgroundColor": "#0f1a2b"
     },
     "assetBundlePatterns": [
-      "**/*"
+      "assets/icon.png",
+      "assets/splash.png",
+      "assets/adaptive-icon.png",
+      "assets/favicon.png"
     ],
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "ms.contact.compass",
-      "backgroundModes": ["audio"],
       "infoPlist": {
-        "UIBackgroundModes": ["audio"],
+        "NSAppTransportSecurity": { 
+          "NSAllowsArbitraryLoads": true 
+        },
+        "UIBackgroundModes": [
+          "audio",
+          "audio"
+        ],
         "NSLocationWhenInUseUsageDescription": "This app uses device sensors for compass functionality.",
-        "UIRequiredDeviceCapabilities": ["magnetometer"]
+        "UIRequiredDeviceCapabilities": [
+          "magnetometer",
+          "magnetometer"
+        ],
+        "ITSAppUsesNonExemptEncryption": false
       },
       "buildNumber": "1"
     },
@@ -30,12 +42,27 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FFFFFF"
       },
-      "permissions": ["VIBRATE"]
+      "permissions": [
+        "VIBRATE"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
+    "extra": {
+      "eas": {
+        "projectId": "2029c4ea-0a98-479e-b510-ced9f26bb1bf"
+      }
+    },
     "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "15.1"
+          }
+        }
+      ]
     ]
   }
 }
