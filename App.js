@@ -105,8 +105,8 @@ export default function App() {
   const lastDirectionalSoundTime = useRef(0);
   const directionSoundInterval = useRef(null);
   const currentHeading = useRef(0);
-  const northSoundPlaying = useRef(false); // Track if north sound is currently playing
-  const pulseTimeout = useRef(null); // Track pulse fade timeout
+  const northSoundPlaying = useRef(false);
+  const pulseRef = useRef(null); // Direct ref to pulse element
 
   // ----- AUDIO FUNCTIONS -----------------------------------------------------
   const initAudio = async () => {
@@ -141,7 +141,7 @@ export default function App() {
         const dirURI = await writeWav(`dir_${i}.wav`, sineBuffer(440, 0.25, panValue));
         dirSounds.current[i] = (await Audio.Sound.createAsync(
           { uri: dirURI }, 
-          { shouldPlay: false, volume: 0.7 }
+          { shouldPlay: false, volume: 0.4 }
         )).sound;
       }
 
@@ -266,23 +266,20 @@ export default function App() {
 
     const northNow = roundedHeading <= 5 || roundedHeading >= 355;
     
+    // Direct manipulation of pulse visibility
     if (northNow && !north) {
+      // Just entered north zone
       setNorth(true);
+      if (pulseRef.current) {
+        pulseRef.current.setNativeProps({ style: { opacity: 0.4 } });
+      }
       playNorth();
       stopSilentSound();
-      
-      // Clear any existing pulse timeout
-      if (pulseTimeout.current) {
-        clearTimeout(pulseTimeout.current);
-        pulseTimeout.current = null;
-      }
     } else if (!northNow && north) {
-      // Start timeout to hide pulse after 1 second of not facing north
-      if (!pulseTimeout.current) {
-        pulseTimeout.current = setTimeout(() => {
-          setNorth(false);
-          pulseTimeout.current = null;
-        }, 1000);
+      // Just left north zone
+      setNorth(false);
+      if (pulseRef.current) {
+        pulseRef.current.setNativeProps({ style: { opacity: 0 } });
       }
       
       if (freq > 0) {
@@ -367,11 +364,6 @@ export default function App() {
       stopDirectionSoundTimer();
       stopSilentSound();
       
-      // Clear pulse timeout
-      if (pulseTimeout.current) {
-        clearTimeout(pulseTimeout.current);
-      }
-      
       northSound.current?.unloadAsync();
       Object.values(dirSounds.current).forEach(sound => sound?.unloadAsync());
     };
@@ -401,23 +393,26 @@ export default function App() {
 
       {/* Compass */}
       <View style={[styles.compassWrap, { width: compassSize, height: compassSize }]}>
-        {north && (
-          <View style={[styles.pulse, { 
+        <View 
+          ref={pulseRef}
+          style={[styles.pulse, { 
             width: compassSize + 20, 
             height: compassSize + 20,
-            borderRadius: (compassSize + 20) / 2 
-          }]} />
-        )}
+            borderRadius: (compassSize + 20) / 2,
+            opacity: 0 // Start hidden
+          }]} 
+        />
         
         <Svg width={compassSize} height={compassSize}>
           <Defs>
             <RadialGradient id="compassGrad" cx="50%" cy="50%" r="50%">
-              <Stop offset="0%" stopColor="#253b56" />
-              <Stop offset="100%" stopColor="#1a2942" />
+              <Stop offset="0%" stopColor="#1E293B" />
+              <Stop offset="70%" stopColor="#0F172A" />
+              <Stop offset="100%" stopColor="#020617" />
             </RadialGradient>
             <RadialGradient id="innerGrad" cx="50%" cy="50%" r="50%">
-              <Stop offset="0%" stopColor="#223651" />
-              <Stop offset="100%" stopColor="#172334" />
+              <Stop offset="0%" stopColor="#334155" />
+              <Stop offset="100%" stopColor="#1E293B" />
             </RadialGradient>
           </Defs>
           
@@ -427,8 +422,8 @@ export default function App() {
               cy={radius} 
               r={radius - 5} 
               fill="url(#compassGrad)" 
-              stroke="rgba(0, 126, 255, 0.2)" 
-              strokeWidth="2" 
+              stroke="rgba(59, 130, 246, 0.3)" 
+              strokeWidth="1.5" 
             />
             
             <Circle 
@@ -436,7 +431,7 @@ export default function App() {
               cy={radius} 
               r={radius - 25} 
               fill="url(#innerGrad)" 
-              stroke="rgba(255,255,255,0.1)" 
+              stroke="rgba(148, 163, 184, 0.2)" 
               strokeWidth="1" 
             />
 
@@ -470,49 +465,61 @@ export default function App() {
               );
             })}
 
-            {/* Cardinal directions - positioned further inside the circle */}
-            <SvgText x={radius} y={50} textAnchor="middle" fill="#ff5252" fontSize="22" fontWeight="bold">N</SvgText>
-            <SvgText x={compassSize - 50} y={radius + 8} textAnchor="middle" fill="#fff" fontSize="20">E</SvgText>
-            <SvgText x={radius} y={compassSize - 35} textAnchor="middle" fill="#fff" fontSize="20">S</SvgText>
-            <SvgText x={50} y={radius + 8} textAnchor="middle" fill="#fff" fontSize="20">W</SvgText>
+            {/* Cardinal directions - E, S, W only (N will be rendered on top later) */}
+            <SvgText x={compassSize - 55} y={radius + 7} textAnchor="middle" fill="#fff" fontSize="18">E</SvgText>
+            <SvgText x={radius} y={compassSize - 40} textAnchor="middle" fill="#fff" fontSize="18">S</SvgText>
+            <SvgText x={55} y={radius + 7} textAnchor="middle" fill="#fff" fontSize="18">W</SvgText>
           </G>
 
-          {/* Fixed gray arrow pointing up (shows device orientation) */}
-          <G>
+          {/* Modern semi-transparent gray arrow pointing up (shows device orientation) */}
+          <G opacity="0.6">
             <Polygon
-              points={`${radius},${30} ${radius-8},${50} ${radius+8},${50}`}
-              fill="#888"
-              stroke="#666"
+              points={`${radius},${25} ${radius-6},${42} ${radius+6},${42}`}
+              fill="#9CA3AF"
+              stroke="#6B7280"
+              strokeWidth="0.5"
+            />
+            <Line 
+              x1={radius} y1={42} 
+              x2={radius} y2={compassSize - 65} 
+              stroke="#9CA3AF" 
+              strokeWidth="2.5" 
+              strokeLinecap="round"
+              opacity="0.8"
+            />
+          </G>
+
+          {/* Modern red arrow pointing toward north (rotates with compass) */}
+          <G transform={`rotate(${rotRef.current} ${radius} ${radius})`}>
+            <Polygon
+              points={`${radius},${25} ${radius-8},${45} ${radius+8},${45}`}
+              fill="#EF4444"
+              stroke="#DC2626"
               strokeWidth="1"
             />
             <Line 
-              x1={radius} y1={50} 
-              x2={radius} y2={compassSize - 60} 
-              stroke="#888" 
-              strokeWidth="3" 
+              x1={radius} y1={45} 
+              x2={radius} y2={radius + 35} 
+              stroke="#EF4444" 
+              strokeWidth="3.5" 
               strokeLinecap="round" 
             />
-          </G>
-
-          {/* Red arrow pointing toward north (rotates with compass) */}
-          <G transform={`rotate(${rotRef.current} ${radius} ${radius})`}>
+            {/* Modern arrow tip glow effect */}
             <Polygon
-              points={`${radius},${30} ${radius-10},${55} ${radius+10},${55}`}
-              fill="#ff5252"
-              stroke="#cc0000"
-              strokeWidth="2"
+              points={`${radius},${25} ${radius-8},${45} ${radius+8},${45}`}
+              fill="#FCA5A5"
+              opacity="0.3"
             />
-            <Line 
-              x1={radius} y1={55} 
-              x2={radius} y2={radius + 30} 
-              stroke="#ff5252" 
-              strokeWidth="4" 
-              strokeLinecap="round" 
-            />
+            
+            {/* N label attached to red arrow - rotates with it */}
+            <SvgText x={radius} y={70} textAnchor="middle" fill="#000" fontSize="20" fontWeight="bold" stroke="#000" strokeWidth="3">N</SvgText>
+            <SvgText x={radius} y={70} textAnchor="middle" fill="#EF4444" fontSize="20" fontWeight="bold">N</SvgText>
           </G>
 
-          <Circle cx={radius} cy={radius} r="15" fill="#fff" stroke="#333" strokeWidth="2" />
-          <Circle cx={radius} cy={radius} r="8" fill="#333" />
+          {/* Modern center pin with depth */}
+          <Circle cx={radius} cy={radius} r="12" fill="#F8FAFC" stroke="#334155" strokeWidth="1.5" />
+          <Circle cx={radius} cy={radius} r="6" fill="#64748B" />
+          <Circle cx={radius} cy={radius} r="3" fill="#F1F5F9" opacity="0.8" />
         </Svg>
       </View>
 
@@ -567,10 +574,14 @@ const styles = StyleSheet.create({
   },
   pulse: {
     position: 'absolute',
-    borderWidth: 3,
-    borderColor: '#ff5252',
-    opacity: 0.3,
+    borderWidth: 2,
+    borderColor: '#EF4444',
+    opacity: 0.4,
     backgroundColor: 'transparent',
+    shadowColor: '#EF4444',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 8,
   },
   readout: {
     alignItems: 'center',
