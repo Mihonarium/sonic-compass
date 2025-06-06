@@ -4,11 +4,11 @@ import {
   Text,
   View,
   Switch,
-  Picker,
   Alert,
   AppState,
   Dimensions
 } from 'react-native';
+import { Picker } from '@react-native-picker/picker';
 import { Audio } from 'expo-av';
 import { Magnetometer } from 'expo-sensors';
 import * as ScreenOrientation from 'expo-screen-orientation';
