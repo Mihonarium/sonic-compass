@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Background Compass",
+    "name": "Sonic Compass",
     "slug": "background-compass",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -21,9 +21,6 @@
       "supportsTablet": false,
       "bundleIdentifier": "ms.contact.compass",
       "infoPlist": {
-        "NSAppTransportSecurity": { 
-          "NSAllowsArbitraryLoads": true 
-        },
         "UIBackgroundModes": [
           "audio",
           "audio"
@@ -35,7 +32,7 @@
         ],
         "ITSAppUsesNonExemptEncryption": false
       },
-      "buildNumber": "1"
+      "buildNumber": "2"
     },
     "android": {
       "adaptiveIcon": {

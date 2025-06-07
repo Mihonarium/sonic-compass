@@ -1,8 +1,7 @@
-// File: App.js
 import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet, View, Text, TouchableOpacity,
-  Alert, AppState, Dimensions
+  Alert, AppState, Dimensions, ScrollView, Switch, Modal
 } from 'react-native';
 import { Audio, InterruptionModeIOS, InterruptionModeAndroid } from 'expo-av';
 import CompassHeading from 'react-native-compass-heading';
@@ -19,16 +18,17 @@ const { width: screenWidth } = Dimensions.get('window');
 ////////////////////////////////////////////////////////////////////////////////
 const FREQ_OPTS = [
   { label: 'Off', value: 0 },
-  { label: '0.5s', value: 500 },
+  //{ label: '0.5s', value: 500 },
   { label: '1s', value: 1000 },
   { label: '2s', value: 2000 },
   { label: '5s', value: 5000 },
   { label: '10s', value: 10000 },
-  { label: '20s', value: 20000 },
   { label: '30s', value: 30000 },
-  { label: '60s', value: 60000 }
+  { label: '60s', value: 60000 },
+  { label: '300s', value: 300000 }
 ];
 const SAMPLE_RATE = 44100;
+const QUESTION_SOUND_DELAY = 1000; // 1 second before directional sound
 
 ////////////////////////////////////////////////////////////////////////////////
 // 2. AUDIO HELPERS /////////////////////////////////////////////////////////////
@@ -93,20 +93,25 @@ const writeWav = async (name, floatBuf) => {
 export default function App() {
   // ----- STATE ---------------------------------------------------------------
   const [heading, setHeading] = useState(0);
-  const [freq, setFreq] = useState(1000);
+  const [freq, setFreq] = useState(0); // Start with Off
   const [north, setNorth] = useState(false);
   const [lastDir, setLastDir] = useState(0);
   const [status, setStatus] = useState('Initializing...');
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [questionSoundEnabled, setQuestionSoundEnabled] = useState(false);
 
   // ----- REFS ----------------------------------------------------------------
   const rotRef = useRef(0);
   const northSound = useRef(null);
   const dirSounds = useRef({});
+  const questionSound = useRef(null);
   const lastDirectionalSoundTime = useRef(0);
+  const lastNorthSoundTime = useRef(0);
   const directionSoundInterval = useRef(null);
   const currentHeading = useRef(0);
   const northSoundPlaying = useRef(false);
-  const pulseRef = useRef(null); // Direct ref to pulse element
+  const pulseRef = useRef(null);
+  const questionTimeoutRef = useRef(null);
 
   // ----- AUDIO FUNCTIONS -----------------------------------------------------
   const initAudio = async () => {
@@ -121,20 +126,25 @@ export default function App() {
         playThroughEarpieceAndroid: false,
       });
 
-      // Create north sound (mono)
+      // Create north sound (celebratory tone)
       const northURI = await writeWav('north.wav', sineBuffer(880, 0.3));
       northSound.current = (await Audio.Sound.createAsync(
         { uri: northURI }, 
         { shouldPlay: false, volume: 0.8 }
       )).sound;
 
+      // Create question sound (neutral tone, centered)
+      const questionURI = await writeWav('question.wav', sineBuffer(660, 0.2, 0));
+      questionSound.current = (await Audio.Sound.createAsync(
+        { uri: questionURI }, 
+        { shouldPlay: false, volume: 0.6 }
+      )).sound;
+
       // Create directional sounds with MANY pan values for extremely precise directionality
       const panValues = [];
-      // Generate 41 pan values from -1.0 to +1.0 in 0.05 increments
       for (let i = 0; i <= 40; i++) {
         panValues.push(-1.0 + (i * 0.05));
       }
-      // Result: [-1.0, -0.95, -0.9, -0.85, ..., 0.85, 0.9, 0.95, 1.0]
       
       for (let i = 0; i < panValues.length; i++) {
         const panValue = panValues[i];
@@ -160,16 +170,15 @@ export default function App() {
   };
 
   const playNorth = async () => {
+    lastNorthSoundTime.current = Date.now();
     try {
-      // Only play if not already playing
       if (!northSoundPlaying.current) {
         northSoundPlaying.current = true;
-        await northSound.current?.replayAsync();
-        
-        // Reset flag after sound duration (300ms for north sound)
         setTimeout(() => {
           northSoundPlaying.current = false;
         }, 300);
+        await northSound.current?.replayAsync();
+        
       }
     } catch (error) {
       console.error('North sound error:', error);
@@ -177,12 +186,23 @@ export default function App() {
     }
   };
 
-  const playDir = async (panValue) => {
+  const playQuestionSound = async () => {
     try {
-      const correctedPan = -panValue; // Invert for correct left/right
+      await questionSound.current?.replayAsync();
+    } catch (error) {
+      console.error('Question sound error:', error);
+    }
+  };
+
+  const playDir = async () => {
+    try {
+      // Get current heading at time of playing directional sound
+      const hdg = currentHeading.current;
+      const panValue = Math.sin(hdg * Math.PI / 180);
+      const correctedPan = -panValue;
       
       // Map pan value (-1 to 1) to sound index (0 to 40) for 41 different positions
-      const index = Math.round((correctedPan + 1) * 20); // Maps -1->0, 0->20, 1->40
+      const index = Math.round((correctedPan + 1) * 20);
       const soundIndex = Math.max(0, Math.min(40, index));
       
       const sound = dirSounds.current[soundIndex];
@@ -228,18 +248,45 @@ export default function App() {
       directionSoundInterval.current = null;
     }
     
+    // Clear any pending question sound timeout
+    if (questionTimeoutRef.current) {
+      clearTimeout(questionTimeoutRef.current);
+      questionTimeoutRef.current = null;
+    }
+    
+    // Only start timer if frequency is not Off (> 0)
     if (freq > 0) {
-      directionSoundInterval.current = setInterval(() => {
+      // Play immediately on start
+      const playDirectionalSequence = () => {
         const hdg = currentHeading.current;
         const northNow = hdg <= 5 || hdg >= 355;
         
+        // Only play if not facing north
         if (!northNow) {
-          const panValue = Math.sin(hdg * Math.PI / 180);
-          playDir(panValue);
-          lastDirectionalSoundTime.current = Date.now();
-          setLastDir(Date.now());
+          if (questionSoundEnabled) {
+            // Play question sound first
+            playQuestionSound();
+            
+            // Schedule directional sound after delay
+            questionTimeoutRef.current = setTimeout(() => {
+              playDir(); // Will get current heading at time of playing
+              lastDirectionalSoundTime.current = Date.now();
+              setLastDir(Date.now());
+            }, QUESTION_SOUND_DELAY);
+          } else {
+            // Play directional sound immediately
+            playDir();
+            lastDirectionalSoundTime.current = Date.now();
+            setLastDir(Date.now());
+          }
         }
-      }, freq);
+      };
+      
+      // Play first sound immediately
+      playDirectionalSequence();
+      
+      // Then set interval for subsequent sounds
+      directionSoundInterval.current = setInterval(playDirectionalSequence, freq);
     }
   };
 
@@ -247,6 +294,10 @@ export default function App() {
     if (directionSoundInterval.current) {
       clearInterval(directionSoundInterval.current);
       directionSoundInterval.current = null;
+    }
+    if (questionTimeoutRef.current) {
+      clearTimeout(questionTimeoutRef.current);
+      questionTimeoutRef.current = null;
     }
   };
 
@@ -266,35 +317,35 @@ export default function App() {
 
     const northNow = roundedHeading <= 5 || roundedHeading >= 355;
     
-    // Direct manipulation of pulse visibility
     if (northNow && !north) {
-      // Just entered north zone
       setNorth(true);
       if (pulseRef.current) {
         pulseRef.current.setNativeProps({ style: { opacity: 0.4 } });
       }
-      playNorth();
       stopSilentSound();
+      playNorth();
     } else if (!northNow && north) {
-      // Just left north zone
       setNorth(false);
       if (pulseRef.current) {
         pulseRef.current.setNativeProps({ style: { opacity: 0 } });
       }
       
-      if (freq > 0) {
+      //if (freq > 0) {
         startSilentSound();
-      }
+      //}
     }
 
-    if (freq === 0) {
-      stopSilentSound();
-    } else if (!northNow && freq > 0) {
+    //if (freq === 0) {
+    //  stopSilentSound();
+    //} else if (!northNow && freq > 0) {
+    if (!northNow) {
       const timeSinceLastSound = Date.now() - lastDirectionalSoundTime.current;
-      if (timeSinceLastSound > 1000) {
+      const timeSinceLastNorthSound = Date.now() - lastNorthSoundTime.current;
+      if (timeSinceLastSound > 1000 && timeSinceLastNorthSound > 1000) {
         startSilentSound();
       }
     }
+    //}
   };
 
   const startCompass = async () => {
@@ -306,9 +357,12 @@ export default function App() {
       });
       
       lastDirectionalSoundTime.current = 0;
-      startDirectionSoundTimer();
+      lastNorthSoundTime.current = 0;
+      if (freq > 0) {
+        startDirectionSoundTimer();
+      }
       
-      setStatus('Compass active');
+      setStatus('Ready');
     } catch (error) {
       throw new Error(`Compass error: ${error.message}`);
     }
@@ -327,7 +381,7 @@ export default function App() {
       setStatus('Initializing...');
       await initAudio();
       await startCompass();
-      setStatus('Compass active');
+      setStatus('Ready');
     } catch (error) {
       console.error('Initialization error:', error);
       setStatus(`Error: ${error.message}`);
@@ -341,12 +395,18 @@ export default function App() {
 
   const freqTxt = () => FREQ_OPTS.find(o => o.value === freq)?.label || 'Unknown';
   
-  const cycle = () => {
-    const currentIndex = FREQ_OPTS.findIndex(o => o.value === freq);
-    const nextIndex = (currentIndex + 1) % FREQ_OPTS.length;
-    const newFreq = FREQ_OPTS[nextIndex].value;
+  const selectFrequency = (newFreq) => {
     setFreq(newFreq);
-    startDirectionSoundTimer(); // Restart timer with new frequency
+    setShowDropdown(false);
+    
+    // Stop everything first
+    stopDirectionSoundTimer();
+    stopSilentSound();
+    
+    // Restart with new frequency if not Off
+    if (newFreq > 0) {
+      startDirectionSoundTimer();
+    }
   };
 
   // ----- SIDE-EFFECTS --------------------------------------------------------
@@ -365,6 +425,7 @@ export default function App() {
       stopSilentSound();
       
       northSound.current?.unloadAsync();
+      questionSound.current?.unloadAsync();
       Object.values(dirSounds.current).forEach(sound => sound?.unloadAsync());
     };
   }, []);
@@ -374,11 +435,25 @@ export default function App() {
       if (state === 'background') {
         setStatus('Running in background');
       } else if (state === 'active') {
-        setStatus('Compass active');
+        setStatus('Ready');
       }
     });
     return () => sub?.remove();
   }, []);
+
+  // Restart timer when freq changes
+  useEffect(() => {
+    if (freq > 0) {
+      startDirectionSoundTimer();
+    }
+  }, [freq]);
+
+  // Restart timer when questionSoundEnabled changes
+  useEffect(() => {
+    if (freq > 0) {
+      startDirectionSoundTimer();
+    }
+  }, [questionSoundEnabled]);
 
   // ----- RENDER --------------------------------------------------------------
   const compassSize = Math.min(screenWidth * 0.8, 300);
@@ -388,7 +463,7 @@ export default function App() {
     <LinearGradient colors={['#0f1a2b', '#253b56']} style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>North Compass</Text>
+        <Text style={styles.title}>Sonic Compass</Text>
       </View>
 
       {/* Compass */}
@@ -399,7 +474,7 @@ export default function App() {
             width: compassSize + 20, 
             height: compassSize + 20,
             borderRadius: (compassSize + 20) / 2,
-            opacity: 0 // Start hidden
+            opacity: 0
           }]} 
         />
         
@@ -465,13 +540,11 @@ export default function App() {
               );
             })}
 
-            {/* Cardinal directions - E, S, W only (N will be rendered on top later) */}
             <SvgText x={compassSize - 55} y={radius + 7} textAnchor="middle" fill="#fff" fontSize="18">E</SvgText>
             <SvgText x={radius} y={compassSize - 40} textAnchor="middle" fill="#fff" fontSize="18">S</SvgText>
             <SvgText x={55} y={radius + 7} textAnchor="middle" fill="#fff" fontSize="18">W</SvgText>
           </G>
 
-          {/* Modern semi-transparent gray arrow pointing up (shows device orientation) */}
           <G opacity="0.6">
             <Polygon
               points={`${radius},${25} ${radius-6},${42} ${radius+6},${42}`}
@@ -489,7 +562,6 @@ export default function App() {
             />
           </G>
 
-          {/* Modern red arrow pointing toward north (rotates with compass) */}
           <G transform={`rotate(${rotRef.current} ${radius} ${radius})`}>
             <Polygon
               points={`${radius},${25} ${radius-8},${45} ${radius+8},${45}`}
@@ -504,19 +576,16 @@ export default function App() {
               strokeWidth="3.5" 
               strokeLinecap="round" 
             />
-            {/* Modern arrow tip glow effect */}
             <Polygon
               points={`${radius},${25} ${radius-8},${45} ${radius+8},${45}`}
               fill="#FCA5A5"
               opacity="0.3"
             />
             
-            {/* N label attached to red arrow - rotates with it */}
             <SvgText x={radius} y={70} textAnchor="middle" fill="#000" fontSize="20" fontWeight="bold" stroke="#000" strokeWidth="3">N</SvgText>
             <SvgText x={radius} y={70} textAnchor="middle" fill="#EF4444" fontSize="20" fontWeight="bold">N</SvgText>
           </G>
 
-          {/* Modern center pin with depth */}
           <Circle cx={radius} cy={radius} r="12" fill="#F8FAFC" stroke="#334155" strokeWidth="1.5" />
           <Circle cx={radius} cy={radius} r="6" fill="#64748B" />
           <Circle cx={radius} cy={radius} r="3" fill="#F1F5F9" opacity="0.8" />
@@ -530,16 +599,80 @@ export default function App() {
       </View>
 
       {/* Settings */}
-      <View style={styles.settings}>
-        <Text style={styles.settingLabel}>Direction Sound Frequency</Text>
-        <TouchableOpacity style={styles.freqBtn} onPress={cycle}>
-          <Text style={styles.freqTxt}>{freqTxt()}</Text>
-          <Text style={styles.hint}>tap to change</Text>
-        </TouchableOpacity>
+      <View style={styles.settingsContainer}>
+        <View style={styles.settingBox}>
+          <Text style={styles.settingLabel}>Direction Sound Frequency</Text>
+          
+          <TouchableOpacity 
+            style={styles.dropdownButton} 
+            onPress={() => setShowDropdown(!showDropdown)}
+          >
+            <Text style={styles.dropdownButtonText}>{freqTxt()}</Text>
+            <Text style={styles.dropdownArrow}>{showDropdown ? '▲' : '▼'}</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Learning Mode Toggle */}
+        <View style={styles.settingBox}>
+          <View style={styles.switchRow}>
+            <View>
+              <Text style={styles.settingLabel}>Learning Mode</Text>
+              <Text style={styles.settingDescription}>
+                Plays a cue sound 1s before direction
+              </Text>
+            </View>
+            <Switch
+              value={questionSoundEnabled}
+              onValueChange={setQuestionSoundEnabled}
+              trackColor={{ false: '#475569', true: '#3B82F6' }}
+              thumbColor={questionSoundEnabled ? '#fff' : '#f4f4f4'}
+              disabled={freq === 0}
+            />
+          </View>
+        </View>
       </View>
 
       {/* Status */}
       <Text style={styles.status}>{status}</Text>
+
+      {/* Dropdown Modal */}
+      <Modal
+        visible={showDropdown}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowDropdown(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowDropdown(false)}
+        >
+          <View style={styles.modalContent}>
+            <ScrollView style={styles.dropdownMenu} nestedScrollEnabled={true}>
+              {FREQ_OPTS.map((option) => (
+                <TouchableOpacity
+                  key={option.value}
+                  style={[
+                    styles.dropdownItem,
+                    freq === option.value && styles.dropdownItemSelected
+                  ]}
+                  onPress={() => selectFrequency(option.value)}
+                >
+                  <Text style={[
+                    styles.dropdownItemText,
+                    freq === option.value && styles.dropdownItemTextSelected
+                  ]}>
+                    {option.label}
+                  </Text>
+                  {freq === option.value && (
+                    <Text style={styles.checkmark}>✓</Text>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </LinearGradient>
   );
 }
@@ -599,37 +732,101 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.8)',
     marginTop: 8,
   },
-  settings: {
+  settingsContainer: {
     width: '90%',
+    gap: 12,
+  },
+  settingBox: {
+    width: '100%',
     padding: 15,
     backgroundColor: 'rgba(30,45,70,0.5)',
     borderRadius: 8,
     alignItems: 'center',
   },
+  switchRow: {
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   settingLabel: {
     color: '#fff',
     fontSize: 16,
-    marginBottom: 10,
+    marginBottom: 4,
   },
-  freqBtn: {
-    backgroundColor: 'rgba(20,30,50,0.8)',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
+  settingDescription: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 13,
+    marginTop: 2,
+  },
+  dropdownButton: {
+    backgroundColor: 'rgba(248,250,252,0.1)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: 'rgba(148,163,184,0.3)',
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    width: 200,
+    marginTop: 10,
   },
-  freqTxt: {
+  dropdownButtonText: {
     color: '#fff',
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '500',
   },
-  hint: {
+  dropdownArrow: {
     color: 'rgba(255,255,255,0.6)',
     fontSize: 12,
-    marginTop: 2,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: '80%',
+    maxWidth: 300,
+  },
+  dropdownMenu: {
+    backgroundColor: 'rgba(15,23,42,0.98)',
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.3)',
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 20,
+    maxHeight: 300,
+  },
+  dropdownItem: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(148,163,184,0.1)',
+  },
+  dropdownItemSelected: {
+    backgroundColor: 'rgba(59,130,246,0.2)',
+  },
+  dropdownItemText: {
+    color: '#fff',
+    fontSize: 16,
+  },
+  dropdownItemTextSelected: {
+    color: '#3B82F6',
+    fontWeight: '600',
+  },
+  checkmark: {
+    color: '#3B82F6',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   status: {
     position: 'absolute',

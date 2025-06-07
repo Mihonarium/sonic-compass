@@ -11,6 +11,7 @@
   "dependencies": {
     "@expo/config-plugins": "~10.0.0",
     "@react-native-async-storage/async-storage": "2.1.2",
+    "@react-native-community/slider": "^4.5.7",
     "@react-native-picker/picker": "2.11.0",
     "base-64": "^1.0.0",
     "buffer": "^6.0.3",
