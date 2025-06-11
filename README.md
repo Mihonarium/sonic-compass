@@ -10,6 +10,7 @@ A React Native Expo app that provides compass functionality with background audi
 - Background audio playback (works when app is backgrounded)
 - No location tracking required
 - Accessibility-friendly design
+- Optional vibration mode when facing north
 
 ## Setup Instructions
 
