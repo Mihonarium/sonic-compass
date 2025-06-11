@@ -137,7 +137,7 @@ export default function App() {
       const questionURI = await writeWav('question.wav', sineBuffer(660, 0.2, 0));
       questionSound.current = (await Audio.Sound.createAsync(
         { uri: questionURI }, 
-        { shouldPlay: false, volume: 0.6 }
+        { shouldPlay: false, volume: 0.5 }
       )).sound;
 
       // Create directional sounds with MANY pan values for extremely precise directionality
@@ -151,7 +151,7 @@ export default function App() {
         const dirURI = await writeWav(`dir_${i}.wav`, sineBuffer(440, 0.25, panValue));
         dirSounds.current[i] = (await Audio.Sound.createAsync(
           { uri: dirURI }, 
-          { shouldPlay: false, volume: 0.4 }
+          { shouldPlay: false, volume: 0.5 }
         )).sound;
       }
 
