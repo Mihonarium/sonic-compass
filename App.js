@@ -99,6 +99,8 @@ export default function App() {
   const [status, setStatus] = useState('Initializing...');
   const [showDropdown, setShowDropdown] = useState(false);
   const [questionSoundEnabled, setQuestionSoundEnabled] = useState(false);
+  const [calibrationOffset, setCalibrationOffset] = useState(0);
+  const [calibrationPhase, setCalibrationPhase] = useState(0); // 0=idle,1=waiting for placement
 
   // ----- REFS ----------------------------------------------------------------
   const rotRef = useRef(0);
@@ -109,9 +111,11 @@ export default function App() {
   const lastNorthSoundTime = useRef(0);
   const directionSoundInterval = useRef(null);
   const currentHeading = useRef(0);
+  const rawHeadingRef = useRef(0);
   const northSoundPlaying = useRef(false);
   const pulseRef = useRef(null);
   const questionTimeoutRef = useRef(null);
+  const calibrationStartRef = useRef(0);
 
   // ----- AUDIO FUNCTIONS -----------------------------------------------------
   const initAudio = async () => {
@@ -304,18 +308,20 @@ export default function App() {
   // ----- COMPASS FUNCTIONS ---------------------------------------------------
   const updateCompass = (hdg) => {
     const roundedHeading = Math.round(hdg * 10) / 10;
-    currentHeading.current = roundedHeading;
-    
-    const target = -roundedHeading;
+    rawHeadingRef.current = roundedHeading;
+    const adjustedHeading = (roundedHeading + calibrationOffset + 360) % 360;
+    currentHeading.current = adjustedHeading;
+
+    const target = -adjustedHeading;
     let diff = target - rotRef.current;
     
     while (diff > 180) diff -= 360;
     while (diff < -180) diff += 360;
     
     rotRef.current += diff;
-    setHeading(roundedHeading);
+    setHeading(adjustedHeading);
 
-    const northNow = roundedHeading <= 5 || roundedHeading >= 355;
+    const northNow = adjustedHeading <= 5 || adjustedHeading >= 355;
     
     if (northNow && !north) {
       setNorth(true);
@@ -407,6 +413,25 @@ export default function App() {
     if (newFreq > 0) {
       startDirectionSoundTimer();
     }
+  };
+
+  const handleCalibration = () => {
+    if (calibrationPhase === 0) {
+      calibrationStartRef.current = rawHeadingRef.current;
+      setCalibrationPhase(1);
+      setStatus('Place phone in position then press Finish');
+    } else {
+      const diff = calibrationStartRef.current - rawHeadingRef.current;
+      setCalibrationOffset(diff);
+      setCalibrationPhase(0);
+      setStatus('Calibration applied');
+    }
+  };
+
+  const resetCalibration = () => {
+    setCalibrationOffset(0);
+    setCalibrationPhase(0);
+    setStatus('Calibration reset');
   };
 
   // ----- SIDE-EFFECTS --------------------------------------------------------
@@ -629,6 +654,29 @@ export default function App() {
               disabled={freq === 0}
             />
           </View>
+        </View>
+
+        {/* Calibration */}
+        <View style={styles.settingBox}>
+          <View style={styles.switchRow}>
+            <Text style={styles.settingLabel}>Calibration</Text>
+            <TouchableOpacity
+              style={styles.dropdownButton}
+              onPress={handleCalibration}
+            >
+              <Text style={styles.dropdownButtonText}>
+                {calibrationPhase === 0 ? 'Start' : 'Finish'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+          {calibrationOffset !== 0 && (
+            <TouchableOpacity
+              style={[styles.dropdownButton, { marginTop: 10 }]}
+              onPress={resetCalibration}
+            >
+              <Text style={styles.dropdownButtonText}>Reset</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
