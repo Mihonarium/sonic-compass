@@ -26,6 +26,7 @@
           "audio"
         ],
         "NSLocationWhenInUseUsageDescription": "This app uses device sensors for compass functionality.",
+        "NSMotionUsageDescription": "Required for head tracking with AirPods.",
         "UIRequiredDeviceCapabilities": [
           "magnetometer",
           "magnetometer"
