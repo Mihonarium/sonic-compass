@@ -6,6 +6,7 @@ A React Native Expo app that provides compass functionality with background audi
 
 - Real-time compass with smooth rotation
 - Audio notifications when facing north
+- Spatial audio cues with AirPods head tracking
 - Directional audio cues with configurable frequency
 - Background audio playback (works when app is backgrounded)
 - No location tracking required
@@ -48,6 +49,7 @@ Create simple placeholder images or use the Expo defaults:
 3. Login: `eas login`
 4. Configure project: `eas build:configure`
 5. Update `app.json` with your bundle identifier
+6. Install head tracking lib: `npm install react-native-headphone-motion && npx pod-install`
 
 ### 3. GitHub Actions Setup
 

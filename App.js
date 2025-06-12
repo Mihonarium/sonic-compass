@@ -1,3 +1,4 @@
+import * as HeadphoneMotion from "react-native-headphone-motion";
 import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet, View, Text, TouchableOpacity,
@@ -112,7 +113,10 @@ export default function App() {
   const northSoundPlaying = useRef(false);
   const pulseRef = useRef(null);
   const questionTimeoutRef = useRef(null);
-
+  // Headphone yaw relative to global frame; initial offset stored on start
+  const headYaw = useRef(0);
+  const initialHeadYaw = useRef(null);
+  const headSub = useRef(null);
   // ----- AUDIO FUNCTIONS -----------------------------------------------------
   const initAudio = async () => {
     try {
@@ -196,9 +200,12 @@ export default function App() {
 
   const playDir = async () => {
     try {
-      // Get current heading at time of playing directional sound
+      // Get current heading and compensate for head rotation
       const hdg = currentHeading.current;
-      const panValue = Math.sin(hdg * Math.PI / 180);
+      const yawAdj = headYaw.current - (initialHeadYaw.current ?? headYaw.current);
+      let diff = hdg - yawAdj;
+      diff = ((diff % 360) + 360) % 360;
+      const panValue = Math.sin(diff * Math.PI / 180);
       const correctedPan = -panValue;
       
       // Map pan value (-1 to 1) to sound index (0 to 40) for 41 different positions
@@ -239,6 +246,36 @@ export default function App() {
       console.error('Silent sound stop error:', error);
     }
   };
+  const startHeadTracking = async () => {
+    try {
+      if (!HeadphoneMotion.isHeadphoneMotionAvailable) return;
+      const status = await HeadphoneMotion.requestPermission();
+      if (status === HeadphoneMotion.AuthorizationStatus.authorized) {
+        initialHeadYaw.current = null;
+        headSub.current = HeadphoneMotion.onDeviceMotionUpdates(data => {
+          if (initialHeadYaw.current === null) {
+                  // First reading becomes reference yaw
+            initialHeadYaw.current = data.attitude.yawDeg;
+          }
+          headYaw.current = data.attitude.yawDeg;
+        });
+        await HeadphoneMotion.startListenDeviceMotionUpdates();
+      }
+    } catch (e) {
+      console.error("Head tracking error:", e);
+    }
+  };
+
+  const stopHeadTracking = async () => {
+    try {
+      await HeadphoneMotion.stopDeviceMotionUpdates();
+      headSub.current?.remove();
+      headSub.current = null;
+    } catch (e) {
+      console.error("Stop head tracking error:", e);
+    }
+  };
+
 
   // ----- TIMER FUNCTIONS -----------------------------------------------------
   const startDirectionSoundTimer = () => {
@@ -381,6 +418,7 @@ export default function App() {
       setStatus('Initializing...');
       await initAudio();
       await startCompass();
+      await startHeadTracking();
       setStatus('Ready');
     } catch (error) {
       console.error('Initialization error:', error);
@@ -423,6 +461,7 @@ export default function App() {
       stopCompass();
       stopDirectionSoundTimer();
       stopSilentSound();
+      stopHeadTracking();
       
       northSound.current?.unloadAsync();
       questionSound.current?.unloadAsync();
