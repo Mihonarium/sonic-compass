@@ -10,6 +10,14 @@ import * as ScreenOrientation from 'expo-screen-orientation';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Line, Text as SvgText, G, Defs, RadialGradient, Stop, Polygon } from 'react-native-svg';
 import { Buffer } from 'buffer';
+import {
+  startListenDeviceMotionUpdates,
+  stopDeviceMotionUpdates,
+  onDeviceMotionUpdates,
+  requestPermission,
+  isHeadphoneMotionAvailable,
+  AuthorizationStatus,
+} from 'react-native-headphone-motion';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -99,12 +107,15 @@ export default function App() {
   const [status, setStatus] = useState('Initializing...');
   const [showDropdown, setShowDropdown] = useState(false);
   const [questionSoundEnabled, setQuestionSoundEnabled] = useState(false);
+  const [spatialAudioEnabled, setSpatialAudioEnabled] = useState(false);
 
   // ----- REFS ----------------------------------------------------------------
   const rotRef = useRef(0);
   const northSound = useRef(null);
   const dirSounds = useRef({});
   const questionSound = useRef(null);
+  const headYaw = useRef(0);
+  const motionSub = useRef(null);
   const lastDirectionalSoundTime = useRef(0);
   const lastNorthSoundTime = useRef(0);
   const directionSoundInterval = useRef(null);
@@ -198,7 +209,9 @@ export default function App() {
     try {
       // Get current heading at time of playing directional sound
       const hdg = currentHeading.current;
-      const panValue = Math.sin(hdg * Math.PI / 180);
+      const head = spatialAudioEnabled ? headYaw.current : 0;
+      const relative = hdg - head;
+      const panValue = Math.sin(relative * Math.PI / 180);
       const correctedPan = -panValue;
       
       // Map pan value (-1 to 1) to sound index (0 to 40) for 41 different positions
@@ -237,6 +250,39 @@ export default function App() {
       }
     } catch (error) {
       console.error('Silent sound stop error:', error);
+    }
+  };
+
+  // ----- HEAD TRACKING FUNCTIONS --------------------------------------------
+  const startHeadTracking = async () => {
+    try {
+      if (!isHeadphoneMotionAvailable) {
+        Alert.alert('Head tracking not available on this device');
+        return;
+      }
+
+      const status = await requestPermission();
+      if (status !== AuthorizationStatus.authorized) {
+        Alert.alert('Head tracking permission denied');
+        return;
+      }
+
+      await startListenDeviceMotionUpdates();
+      motionSub.current = onDeviceMotionUpdates((data) => {
+        headYaw.current = data?.attitude?.yawDeg ?? 0;
+      });
+    } catch (error) {
+      console.warn('Head tracking start error:', error);
+    }
+  };
+
+  const stopHeadTracking = async () => {
+    try {
+      motionSub.current?.remove();
+      motionSub.current = null;
+      await stopDeviceMotionUpdates();
+    } catch (error) {
+      console.warn('Head tracking stop error:', error);
     }
   };
 
@@ -455,6 +501,18 @@ export default function App() {
     }
   }, [questionSoundEnabled]);
 
+  // Start or stop head tracking when toggled
+  useEffect(() => {
+    if (spatialAudioEnabled) {
+      startHeadTracking();
+    } else {
+      stopHeadTracking();
+    }
+    return () => {
+      stopHeadTracking();
+    };
+  }, [spatialAudioEnabled]);
+
   // ----- RENDER --------------------------------------------------------------
   const compassSize = Math.min(screenWidth * 0.8, 300);
   const radius = compassSize / 2;
@@ -627,6 +685,24 @@ export default function App() {
               trackColor={{ false: '#475569', true: '#3B82F6' }}
               thumbColor={questionSoundEnabled ? '#fff' : '#f4f4f4'}
               disabled={freq === 0}
+            />
+          </View>
+        </View>
+
+        {/* Spatial Audio Toggle */}
+        <View style={styles.settingBox}>
+          <View style={styles.switchRow}>
+            <View>
+              <Text style={styles.settingLabel}>Spatial Audio</Text>
+              <Text style={styles.settingDescription}>
+                AirPods head tracking
+              </Text>
+            </View>
+            <Switch
+              value={spatialAudioEnabled}
+              onValueChange={setSpatialAudioEnabled}
+              trackColor={{ false: '#475569', true: '#3B82F6' }}
+              thumbColor={spatialAudioEnabled ? '#fff' : '#f4f4f4'}
             />
           </View>
         </View>
