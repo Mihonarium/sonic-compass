@@ -116,6 +116,7 @@ export default function App() {
   const pulseRef = useRef(null);
   const questionTimeoutRef = useRef(null);
   const calibrationStartRef = useRef(0);
+  const calibrationTimeoutRef = useRef(null);
 
   // ----- AUDIO FUNCTIONS -----------------------------------------------------
   const initAudio = async () => {
@@ -415,20 +416,40 @@ export default function App() {
     }
   };
 
+  const applyCalibration = () => {
+    if (calibrationTimeoutRef.current) {
+      clearTimeout(calibrationTimeoutRef.current);
+      calibrationTimeoutRef.current = null;
+    }
+    const diff = calibrationStartRef.current - rawHeadingRef.current;
+    setCalibrationOffset(diff);
+    setCalibrationPhase(0);
+    setStatus('Calibration applied');
+  };
+
   const handleCalibration = () => {
     if (calibrationPhase === 0) {
+      if (calibrationTimeoutRef.current) {
+        clearTimeout(calibrationTimeoutRef.current);
+      }
       calibrationStartRef.current = rawHeadingRef.current;
       setCalibrationPhase(1);
       setStatus('Place phone in position then press Finish');
+      calibrationTimeoutRef.current = setTimeout(() => {
+        if (calibrationPhase === 1) {
+          applyCalibration();
+        }
+      }, 5000);
     } else {
-      const diff = calibrationStartRef.current - rawHeadingRef.current;
-      setCalibrationOffset(diff);
-      setCalibrationPhase(0);
-      setStatus('Calibration applied');
+      applyCalibration();
     }
   };
 
   const resetCalibration = () => {
+    if (calibrationTimeoutRef.current) {
+      clearTimeout(calibrationTimeoutRef.current);
+      calibrationTimeoutRef.current = null;
+    }
     setCalibrationOffset(0);
     setCalibrationPhase(0);
     setStatus('Calibration reset');
@@ -448,7 +469,12 @@ export default function App() {
       stopCompass();
       stopDirectionSoundTimer();
       stopSilentSound();
-      
+
+      if (calibrationTimeoutRef.current) {
+        clearTimeout(calibrationTimeoutRef.current);
+        calibrationTimeoutRef.current = null;
+      }
+
       northSound.current?.unloadAsync();
       questionSound.current?.unloadAsync();
       Object.values(dirSounds.current).forEach(sound => sound?.unloadAsync());
