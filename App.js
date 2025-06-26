@@ -99,6 +99,9 @@ export default function App() {
   const [status, setStatus] = useState('Initializing...');
   const [showDropdown, setShowDropdown] = useState(false);
   const [questionSoundEnabled, setQuestionSoundEnabled] = useState(false);
+  const [calibrationOffset, setCalibrationOffset] = useState(0);
+  const [isCalibrating, setIsCalibrating] = useState(false);
+  const [calibCountdown, setCalibCountdown] = useState(5);
 
   // ----- REFS ----------------------------------------------------------------
   const rotRef = useRef(0);
@@ -112,6 +115,8 @@ export default function App() {
   const northSoundPlaying = useRef(false);
   const pulseRef = useRef(null);
   const questionTimeoutRef = useRef(null);
+  const calibrationTimer = useRef(null);
+  const calibrationInterval = useRef(null);
 
   // ----- AUDIO FUNCTIONS -----------------------------------------------------
   const initAudio = async () => {
@@ -304,18 +309,19 @@ export default function App() {
   // ----- COMPASS FUNCTIONS ---------------------------------------------------
   const updateCompass = (hdg) => {
     const roundedHeading = Math.round(hdg * 10) / 10;
-    currentHeading.current = roundedHeading;
-    
-    const target = -roundedHeading;
+    const adjustedHeading = (roundedHeading - calibrationOffset + 360) % 360;
+    currentHeading.current = adjustedHeading;
+
+    const target = -adjustedHeading;
     let diff = target - rotRef.current;
     
     while (diff > 180) diff -= 360;
     while (diff < -180) diff += 360;
     
     rotRef.current += diff;
-    setHeading(roundedHeading);
+    setHeading(adjustedHeading);
 
-    const northNow = roundedHeading <= 5 || roundedHeading >= 355;
+    const northNow = adjustedHeading <= 5 || adjustedHeading >= 355;
     
     if (northNow && !north) {
       setNorth(true);
@@ -409,6 +415,33 @@ export default function App() {
     }
   };
 
+  const handleCalibrate = () => {
+    if (isCalibrating) return;
+
+    const start = currentHeading.current;
+    setIsCalibrating(true);
+    setStatus('Calibrating...');
+    setCalibCountdown(5);
+
+    calibrationInterval.current = setInterval(() => {
+      setCalibCountdown(c => {
+        if (c <= 1) return 1;
+        return c - 1;
+      });
+    }, 1000);
+
+    calibrationTimer.current = setTimeout(() => {
+      clearInterval(calibrationInterval.current);
+      calibrationInterval.current = null;
+      const end = currentHeading.current;
+      const offset = (end - start + 360) % 360;
+      setCalibrationOffset(offset);
+      setIsCalibrating(false);
+      setStatus('Calibration complete');
+      setCalibCountdown(5);
+    }, 5000);
+  };
+
   // ----- SIDE-EFFECTS --------------------------------------------------------
   useEffect(() => {
     ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
@@ -423,7 +456,16 @@ export default function App() {
       stopCompass();
       stopDirectionSoundTimer();
       stopSilentSound();
-      
+
+      if (calibrationTimer.current) {
+        clearTimeout(calibrationTimer.current);
+        calibrationTimer.current = null;
+      }
+      if (calibrationInterval.current) {
+        clearInterval(calibrationInterval.current);
+        calibrationInterval.current = null;
+      }
+
       northSound.current?.unloadAsync();
       questionSound.current?.unloadAsync();
       Object.values(dirSounds.current).forEach(sound => sound?.unloadAsync());
@@ -630,6 +672,19 @@ export default function App() {
             />
           </View>
         </View>
+
+        {/* Calibrate Button */}
+        <View style={styles.settingBox}>
+          <TouchableOpacity
+            style={styles.calibrateButton}
+            onPress={handleCalibrate}
+            disabled={isCalibrating}
+          >
+            <Text style={styles.calibrateButtonText}>
+              {isCalibrating ? `Calibrating... ${calibCountdown}` : 'Calibrate'}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Status */}
@@ -827,6 +882,21 @@ const styles = StyleSheet.create({
     color: '#3B82F6',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  calibrateButton: {
+    backgroundColor: 'rgba(248,250,252,0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.3)',
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginTop: 10,
+  },
+  calibrateButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '500',
+    textAlign: 'center',
   },
   status: {
     position: 'absolute',
