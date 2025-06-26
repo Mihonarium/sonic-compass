@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet, View, Text, TouchableOpacity,
-  Alert, AppState, Dimensions, ScrollView, Switch, Modal
+  Alert, AppState, Dimensions, ScrollView, Switch, Modal,
+  Vibration
 } from 'react-native';
 import { Audio, InterruptionModeIOS, InterruptionModeAndroid } from 'expo-av';
 import CompassHeading from 'react-native-compass-heading';
+import * as Haptics from 'expo-haptics';
 import * as FileSystem from 'expo-file-system';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -99,6 +101,10 @@ export default function App() {
   const [status, setStatus] = useState('Initializing...');
   const [showDropdown, setShowDropdown] = useState(false);
   const [questionSoundEnabled, setQuestionSoundEnabled] = useState(false);
+  const [vibrationMode, setVibrationMode] = useState(false);
+
+  // Ref to hold latest vibration mode for callbacks
+  const vibrationModeRef = useRef(false);
 
   // ----- REFS ----------------------------------------------------------------
   const rotRef = useRef(0);
@@ -172,13 +178,17 @@ export default function App() {
   const playNorth = async () => {
     lastNorthSoundTime.current = Date.now();
     try {
-      if (!northSoundPlaying.current) {
+      if (vibrationModeRef.current) {
+        // Use haptics for more reliable vibration
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        Vibration.vibrate();
+      } else if (!northSoundPlaying.current) {
         northSoundPlaying.current = true;
         setTimeout(() => {
           northSoundPlaying.current = false;
         }, 300);
         await northSound.current?.replayAsync();
-        
+
       }
     } catch (error) {
       console.error('North sound error:', error);
@@ -187,6 +197,7 @@ export default function App() {
   };
 
   const playQuestionSound = async () => {
+    if (vibrationModeRef.current) return;
     try {
       await questionSound.current?.replayAsync();
     } catch (error) {
@@ -195,6 +206,7 @@ export default function App() {
   };
 
   const playDir = async () => {
+    if (vibrationModeRef.current) return;
     try {
       // Get current heading at time of playing directional sound
       const hdg = currentHeading.current;
@@ -242,6 +254,9 @@ export default function App() {
 
   // ----- TIMER FUNCTIONS -----------------------------------------------------
   const startDirectionSoundTimer = () => {
+    if (vibrationModeRef.current) {
+      return;
+    }
     // Clear any existing timer
     if (directionSoundInterval.current) {
       clearInterval(directionSoundInterval.current);
@@ -322,7 +337,9 @@ export default function App() {
       if (pulseRef.current) {
         pulseRef.current.setNativeProps({ style: { opacity: 0.4 } });
       }
-      stopSilentSound();
+      if (!vibrationModeRef.current) {
+        stopSilentSound();
+      }
       playNorth();
     } else if (!northNow && north) {
       setNorth(false);
@@ -331,14 +348,16 @@ export default function App() {
       }
       
       //if (freq > 0) {
-        startSilentSound();
+        if (!vibrationModeRef.current) {
+          startSilentSound();
+        }
       //}
     }
 
     //if (freq === 0) {
     //  stopSilentSound();
     //} else if (!northNow && freq > 0) {
-    if (!northNow) {
+    if (!northNow && !vibrationModeRef.current) {
       const timeSinceLastSound = Date.now() - lastDirectionalSoundTime.current;
       const timeSinceLastNorthSound = Date.now() - lastNorthSoundTime.current;
       if (timeSinceLastSound > 1000 && timeSinceLastNorthSound > 1000) {
@@ -358,7 +377,7 @@ export default function App() {
       
       lastDirectionalSoundTime.current = 0;
       lastNorthSoundTime.current = 0;
-      if (freq > 0) {
+      if (freq > 0 && !vibrationModeRef.current) {
         startDirectionSoundTimer();
       }
       
@@ -379,7 +398,9 @@ export default function App() {
   const initializeApp = async () => {
     try {
       setStatus('Initializing...');
-      await initAudio();
+      if (!vibrationModeRef.current) {
+        await initAudio();
+      }
       await startCompass();
       setStatus('Ready');
     } catch (error) {
@@ -403,8 +424,8 @@ export default function App() {
     stopDirectionSoundTimer();
     stopSilentSound();
     
-    // Restart with new frequency if not Off
-    if (newFreq > 0) {
+    // Restart with new frequency if not Off and not in vibration mode
+    if (newFreq > 0 && !vibrationModeRef.current) {
       startDirectionSoundTimer();
     }
   };
@@ -417,6 +438,11 @@ export default function App() {
   useEffect(() => {
     initializeApp();
   }, []);
+
+  // Keep ref in sync with latest vibration mode
+  useEffect(() => {
+    vibrationModeRef.current = vibrationMode;
+  }, [vibrationMode]);
 
   useEffect(() => {
     return () => {
@@ -443,17 +469,27 @@ export default function App() {
 
   // Restart timer when freq changes
   useEffect(() => {
-    if (freq > 0) {
+    if (freq > 0 && !vibrationModeRef.current) {
       startDirectionSoundTimer();
     }
-  }, [freq]);
+  }, [freq, vibrationMode]);
 
   // Restart timer when questionSoundEnabled changes
   useEffect(() => {
-    if (freq > 0) {
+    if (freq > 0 && !vibrationModeRef.current) {
       startDirectionSoundTimer();
     }
-  }, [questionSoundEnabled]);
+  }, [questionSoundEnabled, vibrationMode]);
+
+  // Stop sounds when vibration mode toggles on
+  useEffect(() => {
+    if (vibrationModeRef.current) {
+      stopDirectionSoundTimer();
+      stopSilentSound();
+    } else if (freq > 0) {
+      startDirectionSoundTimer();
+    }
+  }, [vibrationMode]);
 
   // ----- RENDER --------------------------------------------------------------
   const compassSize = Math.min(screenWidth * 0.8, 300);
@@ -627,6 +663,24 @@ export default function App() {
               trackColor={{ false: '#475569', true: '#3B82F6' }}
               thumbColor={questionSoundEnabled ? '#fff' : '#f4f4f4'}
               disabled={freq === 0}
+            />
+          </View>
+        </View>
+
+        {/* Vibration Mode Toggle */}
+        <View style={styles.settingBox}>
+          <View style={styles.switchRow}>
+            <View>
+              <Text style={styles.settingLabel}>Vibration Mode</Text>
+              <Text style={styles.settingDescription}>
+                Vibrate on North, no sounds
+              </Text>
+            </View>
+            <Switch
+              value={vibrationMode}
+              onValueChange={setVibrationMode}
+              trackColor={{ false: '#475569', true: '#3B82F6' }}
+              thumbColor={vibrationMode ? '#fff' : '#f4f4f4'}
             />
           </View>
         </View>
