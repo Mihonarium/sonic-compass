@@ -99,6 +99,7 @@ export default function App() {
   const [status, setStatus] = useState('Initializing...');
   const [showDropdown, setShowDropdown] = useState(false);
   const [questionSoundEnabled, setQuestionSoundEnabled] = useState(false);
+  const [isCalibrating, setIsCalibrating] = useState(false);
 
   // ----- REFS ----------------------------------------------------------------
   const rotRef = useRef(0);
@@ -112,6 +113,10 @@ export default function App() {
   const northSoundPlaying = useRef(false);
   const pulseRef = useRef(null);
   const questionTimeoutRef = useRef(null);
+  const calibrationOffsetRef = useRef(0);
+  const rawHeadingRef = useRef(0);
+  const calibrationStartRef = useRef(0);
+  const calibrationTimerRef = useRef(null);
 
   // ----- AUDIO FUNCTIONS -----------------------------------------------------
   const initAudio = async () => {
@@ -304,18 +309,21 @@ export default function App() {
   // ----- COMPASS FUNCTIONS ---------------------------------------------------
   const updateCompass = (hdg) => {
     const roundedHeading = Math.round(hdg * 10) / 10;
-    currentHeading.current = roundedHeading;
-    
-    const target = -roundedHeading;
+    rawHeadingRef.current = roundedHeading;
+
+    const calibratedHeading = (roundedHeading - calibrationOffsetRef.current + 360) % 360;
+    currentHeading.current = calibratedHeading;
+
+    const target = -calibratedHeading;
     let diff = target - rotRef.current;
     
     while (diff > 180) diff -= 360;
     while (diff < -180) diff += 360;
     
     rotRef.current += diff;
-    setHeading(roundedHeading);
+    setHeading(calibratedHeading);
 
-    const northNow = roundedHeading <= 5 || roundedHeading >= 355;
+    const northNow = calibratedHeading <= 5 || calibratedHeading >= 355;
     
     if (northNow && !north) {
       setNorth(true);
@@ -375,6 +383,26 @@ export default function App() {
     setStatus('Compass stopped');
   };
 
+  const startCalibration = () => {
+    if (isCalibrating) return;
+    if (calibrationTimerRef.current) {
+      clearTimeout(calibrationTimerRef.current);
+      calibrationTimerRef.current = null;
+    }
+    calibrationStartRef.current = rawHeadingRef.current;
+    setIsCalibrating(true);
+    setStatus('Calibrating...');
+
+    calibrationTimerRef.current = setTimeout(() => {
+      const endHeading = rawHeadingRef.current;
+      let offset = endHeading - calibrationStartRef.current;
+      offset = ((offset % 360) + 360) % 360;
+      calibrationOffsetRef.current = offset;
+      setIsCalibrating(false);
+      setStatus('Calibrated');
+    }, 5000);
+  };
+
   // ----- UI FUNCTIONS --------------------------------------------------------
   const initializeApp = async () => {
     try {
@@ -423,10 +451,14 @@ export default function App() {
       stopCompass();
       stopDirectionSoundTimer();
       stopSilentSound();
-      
+
       northSound.current?.unloadAsync();
       questionSound.current?.unloadAsync();
       Object.values(dirSounds.current).forEach(sound => sound?.unloadAsync());
+      if (calibrationTimerRef.current) {
+        clearTimeout(calibrationTimerRef.current);
+        calibrationTimerRef.current = null;
+      }
     };
   }, []);
 
@@ -629,6 +661,20 @@ export default function App() {
               disabled={freq === 0}
             />
           </View>
+        </View>
+
+        {/* Calibration Button */}
+        <View style={styles.settingBox}>
+          <Text style={styles.settingLabel}>Compass Calibration</Text>
+          <TouchableOpacity
+            style={styles.dropdownButton}
+            onPress={startCalibration}
+            disabled={isCalibrating}
+          >
+            <Text style={styles.dropdownButtonText}>
+              {isCalibrating ? 'Calibrating...' : 'Calibrate'}
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
 

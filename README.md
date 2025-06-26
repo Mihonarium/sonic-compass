@@ -7,6 +7,7 @@ A React Native Expo app that provides compass functionality with background audi
 - Real-time compass with smooth rotation
 - Audio notifications when facing north
 - Directional audio cues with configurable frequency
+- Optional calibration for using the phone at an angle
 - Background audio playback (works when app is backgrounded)
 - No location tracking required
 - Accessibility-friendly design
@@ -98,7 +99,8 @@ eas submit --platform ios
 1. Open app and toggle the switch to start compass
 2. Point device north to hear notification sound
 3. Configure direction sound frequency in settings
-4. App continues to work when backgrounded or when other apps are open
+4. (Optional) Tap **Calibrate** and place the phone where you'll keep it
+5. App continues to work when backgrounded or when other apps are open
 
 ## Notes
 
