@@ -10,6 +10,7 @@ A React Native Expo app that provides compass functionality with background audi
 - Background audio playback (works when app is backgrounded)
 - No location tracking required
 - Accessibility-friendly design
+- Optional vibration mode when facing north (disables all sounds)
 
 ## Setup Instructions
 
@@ -96,9 +97,10 @@ eas submit --platform ios
 ## Usage
 
 1. Open app and toggle the switch to start compass
-2. Point device north to hear notification sound
+2. Point device north to hear a sound or feel vibration
 3. Configure direction sound frequency in settings
-4. App continues to work when backgrounded or when other apps are open
+4. Toggle **Vibration Mode** to disable all audio cues
+5. App continues to work when backgrounded or when other apps are open
 
 ## Notes
 
