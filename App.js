@@ -99,6 +99,8 @@ export default function App() {
   const [status, setStatus] = useState('Initializing...');
   const [showDropdown, setShowDropdown] = useState(false);
   const [questionSoundEnabled, setQuestionSoundEnabled] = useState(false);
+  const [calibrationOffset, setCalibrationOffset] = useState(0);
+  const [calibrating, setCalibrating] = useState(false);
 
   // ----- REFS ----------------------------------------------------------------
   const rotRef = useRef(0);
@@ -112,6 +114,10 @@ export default function App() {
   const northSoundPlaying = useRef(false);
   const pulseRef = useRef(null);
   const questionTimeoutRef = useRef(null);
+  const rawHeadingRef = useRef(0);
+  const calibrationOffsetRef = useRef(0);
+  const calibrationStartRef = useRef(0);
+  const calibrationTimeoutRef = useRef(null);
 
   // ----- AUDIO FUNCTIONS -----------------------------------------------------
   const initAudio = async () => {
@@ -303,7 +309,9 @@ export default function App() {
 
   // ----- COMPASS FUNCTIONS ---------------------------------------------------
   const updateCompass = (hdg) => {
-    const roundedHeading = Math.round(hdg * 10) / 10;
+    rawHeadingRef.current = hdg;
+    const calibrated = (hdg - calibrationOffsetRef.current + 360) % 360;
+    const roundedHeading = Math.round(calibrated * 10) / 10;
     currentHeading.current = roundedHeading;
     
     const target = -roundedHeading;
@@ -409,6 +417,25 @@ export default function App() {
     }
   };
 
+  const startCalibration = () => {
+    if (calibrating) return;
+    setCalibrating(true);
+    setStatus('Calibrating...');
+    calibrationStartRef.current = rawHeadingRef.current;
+    if (calibrationTimeoutRef.current) {
+      clearTimeout(calibrationTimeoutRef.current);
+    }
+    calibrationTimeoutRef.current = setTimeout(() => {
+      const end = rawHeadingRef.current;
+      let diff = end - calibrationStartRef.current;
+      diff = (diff + 360) % 360;
+      calibrationOffsetRef.current = diff;
+      setCalibrationOffset(diff);
+      setCalibrating(false);
+      setStatus('Calibration complete');
+    }, 5000);
+  };
+
   // ----- SIDE-EFFECTS --------------------------------------------------------
   useEffect(() => {
     ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
@@ -427,6 +454,9 @@ export default function App() {
       northSound.current?.unloadAsync();
       questionSound.current?.unloadAsync();
       Object.values(dirSounds.current).forEach(sound => sound?.unloadAsync());
+      if (calibrationTimeoutRef.current) {
+        clearTimeout(calibrationTimeoutRef.current);
+      }
     };
   }, []);
 
@@ -630,6 +660,27 @@ export default function App() {
             />
           </View>
         </View>
+
+        {/* Calibration Button */}
+        <View style={styles.settingBox}>
+          <TouchableOpacity
+            style={[
+              styles.calibrateButton,
+              calibrating && styles.calibrateButtonDisabled,
+            ]}
+            onPress={startCalibration}
+            disabled={calibrating}
+          >
+            <Text style={styles.calibrateButtonText}>
+              {calibrating ? 'Calibrating...' : 'Calibrate'}
+            </Text>
+          </TouchableOpacity>
+          {calibrationOffset > 0 && !calibrating && (
+            <Text style={styles.settingDescription}>
+              Offset: {calibrationOffset.toFixed(1)}°
+            </Text>
+          )}
+        </View>
       </View>
 
       {/* Status */}
@@ -827,6 +878,21 @@ const styles = StyleSheet.create({
     color: '#3B82F6',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  calibrateButton: {
+    backgroundColor: '#3B82F6',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    marginTop: 6,
+  },
+  calibrateButtonDisabled: {
+    backgroundColor: '#475569',
+  },
+  calibrateButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
   status: {
     position: 'absolute',
