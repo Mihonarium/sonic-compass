@@ -99,6 +99,8 @@ export default function App() {
   const [status, setStatus] = useState('Initializing...');
   const [showDropdown, setShowDropdown] = useState(false);
   const [questionSoundEnabled, setQuestionSoundEnabled] = useState(false);
+  const [calibrationOffset, setCalibrationOffset] = useState(0);
+  const [calibrating, setCalibrating] = useState(false);
 
   // ----- REFS ----------------------------------------------------------------
   const rotRef = useRef(0);
@@ -112,6 +114,10 @@ export default function App() {
   const northSoundPlaying = useRef(false);
   const pulseRef = useRef(null);
   const questionTimeoutRef = useRef(null);
+  const calibrationOffsetRef = useRef(0);
+  const initialHeadingRef = useRef(0);
+  const calibrationTimeoutRef = useRef(null);
+  const rawHeadingRef = useRef(0);
 
   // ----- AUDIO FUNCTIONS -----------------------------------------------------
   const initAudio = async () => {
@@ -303,7 +309,11 @@ export default function App() {
 
   // ----- COMPASS FUNCTIONS ---------------------------------------------------
   const updateCompass = (hdg) => {
-    const roundedHeading = Math.round(hdg * 10) / 10;
+    rawHeadingRef.current = hdg;
+    let corrected = hdg - calibrationOffsetRef.current;
+    if (corrected < 0) corrected += 360;
+    if (corrected >= 360) corrected -= 360;
+    const roundedHeading = Math.round(corrected * 10) / 10;
     currentHeading.current = roundedHeading;
     
     const target = -roundedHeading;
@@ -409,6 +419,24 @@ export default function App() {
     }
   };
 
+  const startCalibration = () => {
+    if (calibrating) return;
+    initialHeadingRef.current = rawHeadingRef.current;
+    setCalibrating(true);
+    setStatus('Calibrating...');
+    if (calibrationTimeoutRef.current) {
+      clearTimeout(calibrationTimeoutRef.current);
+    }
+    calibrationTimeoutRef.current = setTimeout(() => {
+      const finalHeading = rawHeadingRef.current;
+      let offset = finalHeading - initialHeadingRef.current;
+      offset = ((offset % 360) + 360) % 360;
+      setCalibrationOffset(offset);
+      setCalibrating(false);
+      setStatus(`Calibrated: ${offset.toFixed(1)}\u00B0 offset`);
+    }, 5000);
+  };
+
   // ----- SIDE-EFFECTS --------------------------------------------------------
   useEffect(() => {
     ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
@@ -454,6 +482,18 @@ export default function App() {
       startDirectionSoundTimer();
     }
   }, [questionSoundEnabled]);
+
+  useEffect(() => {
+    calibrationOffsetRef.current = calibrationOffset;
+  }, [calibrationOffset]);
+
+  useEffect(() => {
+    return () => {
+      if (calibrationTimeoutRef.current) {
+        clearTimeout(calibrationTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // ----- RENDER --------------------------------------------------------------
   const compassSize = Math.min(screenWidth * 0.8, 300);
@@ -629,6 +669,22 @@ export default function App() {
               disabled={freq === 0}
             />
           </View>
+        </View>
+
+        {/* Calibrate Orientation */}
+        <View style={styles.settingBox}>
+          <TouchableOpacity
+            style={styles.calibrateButton}
+            onPress={startCalibration}
+            disabled={calibrating}
+          >
+            <Text style={styles.calibrateButtonText}>
+              {calibrating ? 'Calibrating...' : 'Calibrate Orientation'}
+            </Text>
+          </TouchableOpacity>
+          <Text style={styles.settingDescription}>
+            Hold forward, press, then place phone
+          </Text>
         </View>
       </View>
 
@@ -827,6 +883,18 @@ const styles = StyleSheet.create({
     color: '#3B82F6',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  calibrateButton: {
+    backgroundColor: '#3B82F6',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    marginBottom: 6,
+  },
+  calibrateButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '500',
   },
   status: {
     position: 'absolute',
