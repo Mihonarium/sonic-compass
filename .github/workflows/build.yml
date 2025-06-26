@@ -1,31 +1,28 @@
-name: Build iOS App
+name: Build iOS App (local)
+
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
+  build-ios:
+    runs-on: macos-14        # or macos-latest
     steps:
-      - name: 🏗 Setup repo
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
-      - name: 🏗 Setup Node
-        uses: actions/setup-node@v3
+      - uses: actions/setup-node@v3
         with:
-          node-version: 18.x
-          cache: npm
+          node-version: 18
+          cache: 'npm'
 
-      - name: 🏗 Setup EAS
-        uses: expo/expo-github-action@v8
+      - uses: expo/expo-github-action@v8
         with:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
 
-      - name: 📦 Install dependencies
-        run: npm ci
+      - run: npm ci
 
-      - name: 🚀 Build app
-        run: eas build --platform ios --non-interactive --no-wait
+      - name: 🚀 Build locally with Xcode
+        run: eas build --platform ios \
+                       --profile development \
+                       --local --non-interactive
