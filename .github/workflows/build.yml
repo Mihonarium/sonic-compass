@@ -23,5 +23,4 @@ jobs:
       - run: npm ci
 
       - name: 🚀 Build locally with Xcode
-        run: eas build --platform ios \
-                       --local --non-interactive
+        run: eas build --platform ios --profile development --local --non-interactive
