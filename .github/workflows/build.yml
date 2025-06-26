@@ -24,5 +24,4 @@ jobs:
 
       - name: 🚀 Build locally with Xcode
         run: eas build --platform ios \
-                       --profile development \
                        --local --non-interactive
