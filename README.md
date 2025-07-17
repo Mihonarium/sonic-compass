@@ -1,4 +1,4 @@
-# Background Compass iOS App
+# Background Sonic Compass iOS App
 
 A React Native Expo app that provides compass functionality with background audio capabilities for iOS.
 
