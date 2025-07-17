@@ -8,7 +8,7 @@ A React Native Expo app that provides compass functionality with background audi
 - Audio notifications when facing north
 - Directional audio cues with configurable frequency
 - Background audio playback (works when app is backgrounded)
-- Optional offset calibration for using the phone at an angle
+- Optional offset calibration for using the phone at an angle (including in a pocket)
 - No location tracking required
 - Accessibility-friendly design
 
