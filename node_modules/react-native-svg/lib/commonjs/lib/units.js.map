@@ -1,0 +1,1 @@
+{"version":3,"names":["units","exports","objectBoundingBox","userSpaceOnUse","_default","default"],"sourceRoot":"../../../src","sources":["lib/units.ts"],"mappings":";;;;;;AAAO,MAAMA,KAA4D,GAAAC,OAAA,CAAAD,KAAA,GAAG;EAC1EE,iBAAiB,EAAE,CAAC;EACpBC,cAAc,EAAE;AAClB,CAAC;AAAC,IAAAC,QAAA,GAAAH,OAAA,CAAAI,OAAA,GACaL,KAAK","ignoreList":[]}

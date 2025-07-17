@@ -23,7 +23,8 @@
       "infoPlist": {
         "UIBackgroundModes": [
           "audio",
-          "audio"
+          "background-fetch",
+          "background-processing"
         ],
         "NSLocationWhenInUseUsageDescription": "This app uses device sensors for compass functionality.",
         "UIRequiredDeviceCapabilities": [

@@ -1,0 +1,23 @@
+{
+  "include": ["./src/**/*"],
+
+  "compilerOptions": {
+    "jsx": "react",
+
+    /* Language and Environment */
+    "target": "ESNext",
+    "lib": ["ESNext", "dom"],
+
+    /* Modules */
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+
+    /* Interop Constraints */
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+
+    /* Type Checking */
+    "strict": true,
+    "skipLibCheck": true
+  }
+}

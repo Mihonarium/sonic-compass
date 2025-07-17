@@ -1,0 +1,87 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "host.exp.exponent",
+    "module": "expo.modules.sensors",
+    "version": "14.1.4",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "8.13"
+    }
+  },
+  "variants": [
+    {
+      "name": "releaseVariantReleaseApiPublication",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.libraryelements": "aar",
+        "org.gradle.usage": "java-api"
+      },
+      "files": [
+        {
+          "name": "expo.modules.sensors-14.1.4.aar",
+          "url": "expo.modules.sensors-14.1.4.aar",
+          "size": 102180,
+          "sha512": "b8def46a024e7f0f3077ace08bb278fd38d51ea7f4927af2769b572d52e1711c84a0ffd89631d2ca360f9cc171d70e408592e43b72a9dcb54f37bc7eb14e7494",
+          "sha256": "ccc093b5e4e064381672ec096cdc81e5087e95a99ee0cb30782f31dd0b21fa9e",
+          "sha1": "460a82c0dddceb4943d9ea114763c5658deb0279",
+          "md5": "3f87b3d28395082860aa02e3f3329de6"
+        }
+      ]
+    },
+    {
+      "name": "releaseVariantReleaseRuntimePublication",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.libraryelements": "aar",
+        "org.gradle.usage": "java-runtime"
+      },
+      "dependencies": [
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib-jdk7",
+          "version": {
+            "requires": "2.0.21"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "expo.modules.sensors-14.1.4.aar",
+          "url": "expo.modules.sensors-14.1.4.aar",
+          "size": 102180,
+          "sha512": "b8def46a024e7f0f3077ace08bb278fd38d51ea7f4927af2769b572d52e1711c84a0ffd89631d2ca360f9cc171d70e408592e43b72a9dcb54f37bc7eb14e7494",
+          "sha256": "ccc093b5e4e064381672ec096cdc81e5087e95a99ee0cb30782f31dd0b21fa9e",
+          "sha1": "460a82c0dddceb4943d9ea114763c5658deb0279",
+          "md5": "3f87b3d28395082860aa02e3f3329de6"
+        }
+      ]
+    },
+    {
+      "name": "releaseVariantReleaseSourcePublication",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "java-runtime"
+      },
+      "files": [
+        {
+          "name": "expo.modules.sensors-14.1.4-sources.jar",
+          "url": "expo.modules.sensors-14.1.4-sources.jar",
+          "size": 10638,
+          "sha512": "9d2b6469591f227c31b764c0c773849fd6192b5276cbbe712d4fafe061e03041272f095ee467562be8e4c0b5d30dc67298f24fc679ad265cbbcf3e613f3ec0cd",
+          "sha256": "41a78e0c98e277b575468bcaa0d3ac3366af92609f80302e645913ff342386cd",
+          "sha1": "8e769d4702d36e354345942abf6b5cd18db0fb20",
+          "md5": "74da37fe1f81665c5c9932d73228f9cb"
+        }
+      ]
+    }
+  ]
+}

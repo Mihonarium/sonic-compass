@@ -1,0 +1,15 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "modules": ["LinearGradientModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.lineargradient.LinearGradientModule"],
+    "publication": {
+      "groupId": "host.exp.exponent",
+      "artifactId": "expo.modules.lineargradient",
+      "version": "14.1.5",
+      "repository": "local-maven-repo"
+    }
+  }
+}

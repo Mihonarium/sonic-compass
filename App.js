@@ -1,17 +1,36 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet, View, Text, TouchableOpacity,
-  Alert, AppState, Dimensions, ScrollView, Switch, Modal
+  Alert, AppState, Dimensions, ScrollView, Switch, Modal, Vibration
 } from 'react-native';
 import { Audio, InterruptionModeIOS, InterruptionModeAndroid } from 'expo-av';
 import CompassHeading from 'react-native-compass-heading';
 import * as FileSystem from 'expo-file-system';
 import * as ScreenOrientation from 'expo-screen-orientation';
+import * as BackgroundFetch from 'expo-background-fetch';
+import * as TaskManager from 'expo-task-manager';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Line, Text as SvgText, G, Defs, RadialGradient, Stop, Polygon } from 'react-native-svg';
 import { Buffer } from 'buffer';
 
 const { width: screenWidth } = Dimensions.get('window');
+
+////////////////////////////////////////////////////////////////////////////////
+// 0. BACKGROUND TASK SETUP ////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+const BACKGROUND_COMPASS_TASK = 'background-compass-task';
+
+// Define the background task to keep the app alive
+TaskManager.defineTask(BACKGROUND_COMPASS_TASK, () => {
+  try {
+    // This task helps keep the app active in background
+    // The actual compass logic runs in the foreground
+    return BackgroundFetch.BackgroundFetchResult.NewData;
+  } catch (error) {
+    console.error('Background task error:', error);
+    return BackgroundFetch.BackgroundFetchResult.Failed;
+  }
+});
 
 ////////////////////////////////////////////////////////////////////////////////
 // 1. STATIC CONFIGURATION //////////////////////////////////////////////////////
@@ -102,6 +121,7 @@ export default function App() {
   const [calibrationOffset, setCalibrationOffset] = useState(0);
   const [calibrating, setCalibrating] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [vibrationMode, setVibrationMode] = useState(false);
 
   // ----- REFS ----------------------------------------------------------------
   const rotRef = useRef(0);
@@ -184,11 +204,17 @@ export default function App() {
         setTimeout(() => {
           northSoundPlaying.current = false;
         }, 300);
-        await northSound.current?.replayAsync();
         
+        if (vibrationMode) {
+          // Pleasant vibration pattern: gentle pulse, pause, strong pulse, pause, gentle pulse
+          // This creates a distinctive "North found" feeling
+          Vibration.vibrate([50, 100, 150, 100, 50, 100, 200, 100, 50]);
+        } else {
+          await northSound.current?.replayAsync();
+        }
       }
     } catch (error) {
-      console.error('North sound error:', error);
+      console.error('North sound/vibration error:', error);
       northSoundPlaying.current = false;
     }
   };
@@ -227,6 +253,8 @@ export default function App() {
 
   const startSilentSound = async () => {
     try {
+      // In vibration mode, we still need to keep the app active in background
+      // Silent sound helps maintain background execution
       const silentSound = dirSounds.current.silent;
       if (silentSound) {
         await silentSound.playAsync();
@@ -331,7 +359,10 @@ export default function App() {
       if (pulseRef.current) {
         pulseRef.current.setNativeProps({ style: { opacity: 0.4 } });
       }
-      stopSilentSound();
+      // Keep silent sound running in background even during vibration mode
+      if (!vibrationMode) {
+        stopSilentSound();
+      }
       playNorth();
     } else if (!northNow && north) {
       setNorth(false);
@@ -339,9 +370,8 @@ export default function App() {
         pulseRef.current.setNativeProps({ style: { opacity: 0 } });
       }
       
-      //if (freq > 0) {
-        startSilentSound();
-      //}
+      // Always start silent sound to keep app active in background
+      startSilentSound();
     }
 
     //if (freq === 0) {
@@ -384,11 +414,33 @@ export default function App() {
     setStatus('Compass stopped');
   };
 
+  // ----- BACKGROUND TASK FUNCTIONS ------------------------------------------
+  const registerBackgroundTask = async () => {
+    try {
+      const status = await BackgroundFetch.getStatusAsync();
+      if (status === BackgroundFetch.BackgroundFetchStatus.Restricted || 
+          status === BackgroundFetch.BackgroundFetchStatus.Denied) {
+        console.log('Background refresh is disabled');
+        return;
+      }
+
+      await BackgroundFetch.registerTaskAsync(BACKGROUND_COMPASS_TASK, {
+        minimumInterval: 1000, // 1 second
+        stopOnTerminate: false,
+        startOnBoot: true,
+      });
+      console.log('Background task registered');
+    } catch (error) {
+      console.error('Background task registration error:', error);
+    }
+  };
+
   // ----- UI FUNCTIONS --------------------------------------------------------
   const initializeApp = async () => {
     try {
       setStatus('Initializing...');
       await initAudio();
+      await registerBackgroundTask();
       await startCompass();
       setStatus('Ready');
     } catch (error) {
@@ -459,6 +511,9 @@ export default function App() {
       stopDirectionSoundTimer();
       stopSilentSound();
       
+      // Cleanup background task
+      BackgroundFetch.unregisterTaskAsync(BACKGROUND_COMPASS_TASK).catch(console.error);
+      
       northSound.current?.unloadAsync();
       questionSound.current?.unloadAsync();
       Object.values(dirSounds.current).forEach(sound => sound?.unloadAsync());
@@ -471,13 +526,13 @@ export default function App() {
   useEffect(() => {
     const sub = AppState.addEventListener('change', state => {
       if (state === 'background') {
-        setStatus('Running in background');
+        setStatus(vibrationMode ? 'Running in background (vibration mode)' : 'Running in background');
       } else if (state === 'active') {
-        setStatus('Ready');
+        setStatus(vibrationMode ? 'Ready (vibration mode)' : 'Ready');
       }
     });
     return () => sub?.remove();
-  }, []);
+  }, [vibrationMode]);
 
   // Restart timer when freq changes
   useEffect(() => {
@@ -634,6 +689,9 @@ export default function App() {
       <View style={styles.readout}>
         <Text style={styles.deg}>{heading.toFixed(1)}°</Text>
         <Text style={styles.dir}>{dirTxt(heading)}</Text>
+        {vibrationMode && (
+          <Text style={styles.vibrationIndicator}>📳 Vibration Mode</Text>
+        )}
       </View>
 
       {/* Settings */}
@@ -665,6 +723,24 @@ export default function App() {
               trackColor={{ false: '#475569', true: '#3B82F6' }}
               thumbColor={questionSoundEnabled ? '#fff' : '#f4f4f4'}
               disabled={freq === 0}
+            />
+          </View>
+        </View>
+
+        {/* Vibration Mode Toggle */}
+        <View style={styles.settingBox}>
+          <View style={styles.switchRow}>
+            <View>
+              <Text style={styles.settingLabel}>Vibration Mode</Text>
+              <Text style={styles.settingDescription}>
+                Vibrate with pleasant pattern when facing North (works in background)
+              </Text>
+            </View>
+            <Switch
+              value={vibrationMode}
+              onValueChange={setVibrationMode}
+              trackColor={{ false: '#475569', true: '#3B82F6' }}
+              thumbColor={vibrationMode ? '#fff' : '#f4f4f4'}
             />
           </View>
         </View>
@@ -853,6 +929,12 @@ const styles = StyleSheet.create({
     fontSize: 24,
     color: 'rgba(255,255,255,0.8)',
     marginTop: 8,
+  },
+  vibrationIndicator: {
+    fontSize: 14,
+    color: '#3B82F6',
+    marginTop: 4,
+    fontWeight: '600',
   },
   settingsContainer: {
     width: '90%',

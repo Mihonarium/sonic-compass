@@ -1,0 +1,87 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "host.exp.exponent",
+    "module": "expo.modules.screenorientation",
+    "version": "8.1.7",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "8.13"
+    }
+  },
+  "variants": [
+    {
+      "name": "releaseVariantReleaseApiPublication",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.libraryelements": "aar",
+        "org.gradle.usage": "java-api"
+      },
+      "files": [
+        {
+          "name": "expo.modules.screenorientation-8.1.7.aar",
+          "url": "expo.modules.screenorientation-8.1.7.aar",
+          "size": 36666,
+          "sha512": "b2b19dbfb2e6d071183349e5f4cde6414a8660076bd76bf7665a4bf55611edd63b0a5e2b1e0ed7e9be6a490352d96e209e1fd082c7e33b182372e97706dda80a",
+          "sha256": "da13cd5f7980f02173287d85b9409796b560eb4d5d43b7750cd3fe922ca0e7ba",
+          "sha1": "b4544abbe63f30f394f3d9c2681d73edccc7af31",
+          "md5": "358c54f566948165c647571380125c6a"
+        }
+      ]
+    },
+    {
+      "name": "releaseVariantReleaseRuntimePublication",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.libraryelements": "aar",
+        "org.gradle.usage": "java-runtime"
+      },
+      "dependencies": [
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib-jdk7",
+          "version": {
+            "requires": "2.0.21"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "expo.modules.screenorientation-8.1.7.aar",
+          "url": "expo.modules.screenorientation-8.1.7.aar",
+          "size": 36666,
+          "sha512": "b2b19dbfb2e6d071183349e5f4cde6414a8660076bd76bf7665a4bf55611edd63b0a5e2b1e0ed7e9be6a490352d96e209e1fd082c7e33b182372e97706dda80a",
+          "sha256": "da13cd5f7980f02173287d85b9409796b560eb4d5d43b7750cd3fe922ca0e7ba",
+          "sha1": "b4544abbe63f30f394f3d9c2681d73edccc7af31",
+          "md5": "358c54f566948165c647571380125c6a"
+        }
+      ]
+    },
+    {
+      "name": "releaseVariantReleaseSourcePublication",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "java-runtime"
+      },
+      "files": [
+        {
+          "name": "expo.modules.screenorientation-8.1.7-sources.jar",
+          "url": "expo.modules.screenorientation-8.1.7-sources.jar",
+          "size": 5194,
+          "sha512": "e06be0d0236539250b81b1d5670d89f70600b03c82fa53c245602afdcb2bab06d04d42e6dd85e9686867d069a8b09dd3fbc04f562bc1760e33f68ea614b2ec42",
+          "sha256": "d63ace679c73e409ffd1706ac43973134e9151254bf644d73a33c27539db1037",
+          "sha1": "5bf5cd1bbae7b992e8601eec6cb661ec97d12337",
+          "md5": "28c2714cb59c96db0a24ac4d9ca815ab"
+        }
+      ]
+    }
+  ]
+}

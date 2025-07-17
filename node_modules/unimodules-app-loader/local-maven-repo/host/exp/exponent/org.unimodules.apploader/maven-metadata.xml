@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<metadata>
+  <groupId>host.exp.exponent</groupId>
+  <artifactId>org.unimodules.apploader</artifactId>
+  <versioning>
+    <latest>5.1.3</latest>
+    <release>5.1.3</release>
+    <versions>
+      <version>5.1.3</version>
+    </versions>
+    <lastUpdated>20250430211450</lastUpdated>
+  </versioning>
+</metadata>

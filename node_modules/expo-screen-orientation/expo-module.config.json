@@ -1,0 +1,17 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "appDelegateSubscribers": ["ScreenOrientationAppDelegate"],
+    "reactDelegateHandlers": ["ScreenOrientationReactDelegateHandler"],
+    "modules": ["ScreenOrientationModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.screenorientation.ScreenOrientationModule"],
+    "publication": {
+      "groupId": "host.exp.exponent",
+      "artifactId": "expo.modules.screenorientation",
+      "version": "8.1.7",
+      "repository": "local-maven-repo"
+    }
+  }
+}

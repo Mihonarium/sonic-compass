@@ -1,0 +1,11 @@
+{
+  "platforms": ["apple", "android"],
+  "android": {
+    "publication": {
+      "groupId": "host.exp.exponent",
+      "artifactId": "org.unimodules.apploader",
+      "version": "5.1.3",
+      "repository": "local-maven-repo"
+    }
+  }
+}

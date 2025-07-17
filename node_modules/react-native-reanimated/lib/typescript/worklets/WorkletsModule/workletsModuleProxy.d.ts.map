@@ -1,0 +1,1 @@
+{"version":3,"file":"workletsModuleProxy.d.ts","sourceRoot":"","sources":["../../../../src/worklets/WorkletsModule/workletsModuleProxy.ts"],"names":[],"mappings":"AAEA,OAAO,KAAK,EAAE,YAAY,EAAE,MAAM,mBAAmB,CAAC;AAEtD,yDAAyD;AACzD,MAAM,WAAW,mBAAmB;IAClC,kBAAkB,CAAC,MAAM,EACvB,KAAK,EAAE,MAAM,EACb,mBAAmB,EAAE,OAAO,EAC5B,iBAAiB,CAAC,EAAE,MAAM,GACzB,YAAY,CAAC,MAAM,CAAC,CAAC;CACzB"}
