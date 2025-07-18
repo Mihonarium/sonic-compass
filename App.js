@@ -208,6 +208,7 @@ export default function App() {
     try {
       if (vibrationModeRef.current) {
         await triggerVibration();
+        await startSilentSound();
       } else if (!northSoundPlaying.current) {
         northSoundPlaying.current = true;
         setTimeout(() => {
@@ -258,7 +259,11 @@ export default function App() {
     try {
       const silentSound = dirSounds.current.silent;
       if (silentSound) {
-        await silentSound.playAsync();
+        const status = await silentSound.getStatusAsync();
+        if (!status.isPlaying) {
+          await silentSound.setPositionAsync(0);
+          await silentSound.playAsync();
+        }
       }
     } catch (error) {
       console.error('Silent sound error:', error);
@@ -269,7 +274,12 @@ export default function App() {
     try {
       const silentSound = dirSounds.current.silent;
       if (silentSound) {
-        await silentSound.stopAsync();
+        const status = await silentSound.getStatusAsync();
+        if (status.isLoaded && status.isPlaying) {
+          await silentSound.stopAsync();
+        } else if (status.isLoaded) {
+          await silentSound.setPositionAsync(0);
+        }
       }
     } catch (error) {
       console.error('Silent sound stop error:', error);
@@ -365,7 +375,10 @@ export default function App() {
           }
         }, 1000);
       }
-      stopSilentSound();
+      if (!vibrationModeRef.current) {
+        // Keep silent audio running in vibration mode so the app stays active
+        stopSilentSound();
+      }
       playNorth();
     } else if (!northNow && north) {
       setNorth(false);
@@ -751,7 +764,7 @@ export default function App() {
 
       <View style={styles.gridInfo}>
         <Text style={styles.gridInfoText}>Set the <Text style={styles.gridInfoTitle}>Frequency</Text> of directional North sounds.</Text>
-        <Text style={styles.gridInfoText}>Requires 🎧.</Text>
+        <Text style={styles.gridInfoText}>Start small. Requires 🎧.</Text>
         <Text style={styles.gridInfoText}></Text>
         <Text style={styles.gridInfoText}>The <Text style={styles.gridInfoTitle}>Learning</Text> mode plays a cue 1s before every North sound.</Text>
         <Text style={styles.gridInfoText}>When you hear it, quickly guess where's North.</Text>
