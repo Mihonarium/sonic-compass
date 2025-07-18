@@ -11,6 +11,7 @@ A React Native Expo app that provides compass functionality with background audi
 - Optional offset calibration for using the phone at an angle (including in a pocket)
 - No location tracking required
 - Accessibility-friendly design
+- Optional vibration mode when facing north
 
 ## Setup Instructions
 
