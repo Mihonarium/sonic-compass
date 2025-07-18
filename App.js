@@ -5,6 +5,7 @@ import {
   Vibration
 } from 'react-native';
 import { Audio, InterruptionModeIOS, InterruptionModeAndroid } from 'expo-av';
+import * as Battery from 'expo-battery';
 import CompassHeading from 'react-native-compass-heading';
 import * as Haptics from 'expo-haptics';
 import * as FileSystem from 'expo-file-system';
@@ -105,6 +106,7 @@ export default function App() {
   const [calibrating, setCalibrating] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [vibrationMode, setVibrationMode] = useState(false);
+  const [lowPower, setLowPower] = useState(false);
 
   // ----- REFS ----------------------------------------------------------------
   const rotRef = useRef(0);
@@ -123,6 +125,21 @@ export default function App() {
   const calibrationStartRef = useRef(0);
   const calibrationTimeoutRef = useRef(null);
   const vibrationModeRef = useRef(false);
+  const isBackground = useRef(false);
+
+  const triggerVibration = async () => {
+    try {
+      const state = await Battery.getPowerStateAsync();
+      const low = state?.lowPowerMode;
+      if (low) {
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else {
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+      }
+    } catch (err) {
+      Vibration.vibrate(400);
+    }
+  };
 
   // ----- AUDIO FUNCTIONS -----------------------------------------------------
   const initAudio = async () => {
@@ -183,9 +200,8 @@ export default function App() {
   const playNorth = async () => {
     lastNorthSoundTime.current = Date.now();
     try {
-      if (vibrationModeRef.current) {
-        // note that this only works when low battery mode is not enabled and the taptic engine is on
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Hard);
+      if (vibrationModeRef.current || isBackground.current) {
+        await triggerVibration();
       } else if (!northSoundPlaying.current) {
         northSoundPlaying.current = true;
         setTimeout(() => {
@@ -201,7 +217,6 @@ export default function App() {
   };
 
   const playQuestionSound = async () => {
-    if (vibrationModeRef.current) return;
     try {
       await questionSound.current?.replayAsync();
     } catch (error) {
@@ -210,7 +225,6 @@ export default function App() {
   };
 
   const playDir = async () => {
-    if (vibrationModeRef.current) return;
     try {
       // Get current heading at time of playing directional sound
       const hdg = currentHeading.current;
@@ -258,9 +272,6 @@ export default function App() {
 
   // ----- TIMER FUNCTIONS -----------------------------------------------------
   const startDirectionSoundTimer = () => {
-    if (vibrationModeRef.current) {
-      return;
-    }
     // Clear any existing timer
     if (directionSoundInterval.current) {
       clearInterval(directionSoundInterval.current);
@@ -348,9 +359,7 @@ export default function App() {
           }
         }, 1000);
       }
-      if (!vibrationModeRef.current) {
-        stopSilentSound();
-      }
+      stopSilentSound();
       playNorth();
     } else if (!northNow && north) {
       setNorth(false);
@@ -359,16 +368,14 @@ export default function App() {
       }
       
       //if (freq > 0) {
-        if (!vibrationModeRef.current) {
-          startSilentSound();
-        }
+        startSilentSound();
       //}
     }
 
     //if (freq === 0) {
     //  stopSilentSound();
     //} else if (!northNow && freq > 0) {
-    if (!northNow && !vibrationModeRef.current) {
+    if (!northNow) {
       const timeSinceLastSound = Date.now() - lastDirectionalSoundTime.current;
       const timeSinceLastNorthSound = Date.now() - lastNorthSoundTime.current;
       if (timeSinceLastSound > 1000 && timeSinceLastNorthSound > 1000) {
@@ -388,7 +395,7 @@ export default function App() {
       
       lastDirectionalSoundTime.current = 0;
       lastNorthSoundTime.current = 0;
-      if (freq > 0 && !vibrationModeRef.current) {
+      if (freq > 0) {
         startDirectionSoundTimer();
       }
       
@@ -409,9 +416,7 @@ export default function App() {
   const initializeApp = async () => {
     try {
       setStatus('Initializing...');
-      if (!vibrationModeRef.current) {
-        await initAudio();
-      }
+      await initAudio();
       await startCompass();
       setStatus('Ready');
     } catch (error) {
@@ -435,8 +440,8 @@ export default function App() {
     stopDirectionSoundTimer();
     stopSilentSound();
     
-    // Restart with new frequency if not Off and not in vibration mode
-    if (newFreq > 0 && !vibrationModeRef.current) {
+    // Restart with new frequency if not Off
+    if (newFreq > 0) {
       startDirectionSoundTimer();
     }
   };
@@ -498,6 +503,7 @@ export default function App() {
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', state => {
+      isBackground.current = state !== 'active';
       if (state === 'background') {
         setStatus('Running in background');
       } else if (state === 'active') {
@@ -507,26 +513,35 @@ export default function App() {
     return () => sub?.remove();
   }, []);
 
+  useEffect(() => {
+    const check = async () => {
+      try {
+        const p = await Battery.getPowerStateAsync();
+        setLowPower(p.lowPowerMode ?? false);
+      } catch {}
+    };
+    check();
+    const sub = Battery.addLowPowerModeListener(({ lowPowerMode }) => setLowPower(lowPowerMode));
+    return () => sub.remove();
+  }, []);
+
   // Restart timer when freq changes
   useEffect(() => {
-    if (freq > 0 && !vibrationModeRef.current) {
+    if (freq > 0) {
       startDirectionSoundTimer();
     }
   }, [freq, vibrationMode]);
 
   // Restart timer when questionSoundEnabled changes
   useEffect(() => {
-    if (freq > 0 && !vibrationModeRef.current) {
+    if (freq > 0) {
       startDirectionSoundTimer();
     }
   }, [questionSoundEnabled, vibrationMode]);
 
   // Stop sounds when vibration mode toggles on
   useEffect(() => {
-    if (vibrationModeRef.current) {
-      stopDirectionSoundTimer();
-      stopSilentSound();
-    } else if (freq > 0) {
+    if (freq > 0) {
       startDirectionSoundTimer();
     }
   }, [vibrationMode]);
@@ -822,7 +837,7 @@ export default function App() {
                 <View>
                   <Text style={styles.settingLabel}>Vibration Mode</Text>
                   <Text style={styles.settingDescription}>
-                    Vibrate on North, no sounds
+                    Vibrate on North, keep directional sounds
                   </Text>
                 </View>
                 <Switch
