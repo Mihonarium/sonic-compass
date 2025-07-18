@@ -39,19 +39,57 @@ const QUESTION_SOUND_DELAY = 1000; // 1 second before directional sound
 const sineBuffer = (freq, durSec, panValue = 0) => {
   const frames = durSec * SAMPLE_RATE;
   const buf = new Float32Array(frames * 2); // Stereo
-  
+
   for (let i = 0; i < frames; i++) {
     const t = i / SAMPLE_RATE;
     const fade = Math.min(1, t / 0.02, (durSec - t) / 0.02); // 20ms fade
     const sample = fade * Math.sin(2 * Math.PI * freq * t) * 0.3; // Lower volume
-    
+
     // Apply stereo panning
     const leftGain = Math.cos((panValue + 1) * Math.PI / 4);
     const rightGain = Math.sin((panValue + 1) * Math.PI / 4);
-    
+
     buf[i * 2] = sample * leftGain;     // Left channel
     buf[i * 2 + 1] = sample * rightGain; // Right channel
   }
+  return buf;
+};
+
+// Generate a stereo buffer for a sound coming from a specific angle around the listener.
+// This is a very rough spatialisation using interaural level/time differences and
+// a simple back attenuation to hint whether a sound is behind the listener.
+const directionalBuffer = (freq, durSec, angleDeg) => {
+  const frames = durSec * SAMPLE_RATE;
+  const buf = new Float32Array(frames * 2);
+  const rad = angleDeg * Math.PI / 180;
+
+  // Equal-power panning between ears
+  const leftGain = Math.cos(rad / 2);
+  const rightGain = Math.sin(rad / 2);
+
+  // Interaural time difference (~0.3ms max)
+  const maxDelay = 0.0003;
+  const delay = maxDelay * Math.sin(rad);
+  const leftDelay = -delay / 2;
+  const rightDelay = delay / 2;
+
+  // Simple high-frequency attenuation when sound comes from behind
+  const backAttenuation = angleDeg > 90 && angleDeg < 270 ? 0.7 : 1;
+
+  for (let i = 0; i < frames; i++) {
+    const t = i / SAMPLE_RATE;
+    const fade = Math.min(1, t / 0.02, (durSec - t) / 0.02);
+
+    const lPhase = 2 * Math.PI * freq * Math.max(0, t + leftDelay);
+    const rPhase = 2 * Math.PI * freq * Math.max(0, t + rightDelay);
+
+    const leftSample = fade * Math.sin(lPhase) * 0.3 * leftGain * backAttenuation;
+    const rightSample = fade * Math.sin(rPhase) * 0.3 * rightGain * backAttenuation;
+
+    buf[i * 2] = leftSample;
+    buf[i * 2 + 1] = rightSample;
+  }
+
   return buf;
 };
 
@@ -173,17 +211,11 @@ export default function App() {
         { shouldPlay: false, volume: 0.5 }
       )).sound;
 
-      // Create directional sounds with MANY pan values for extremely precise directionality
-      const panValues = [];
-      for (let i = 0; i <= 120; i++) {
-        panValues.push(-1.0 + (i * (2 / 120)));
-      }
-      
-      for (let i = 0; i < panValues.length; i++) {
-        const panValue = panValues[i];
-        const dirURI = await writeWav(`dir_${i}.wav`, sineBuffer(440, 0.25, panValue));
-        dirSounds.current[i] = (await Audio.Sound.createAsync(
-          { uri: dirURI }, 
+      // Create directional sounds for every angle (0-359) using a rough 3D spatialisation
+      for (let angle = 0; angle < 360; angle++) {
+        const dirURI = await writeWav(`dir_${angle}.wav`, directionalBuffer(440, 0.25, angle));
+        dirSounds.current[angle] = (await Audio.Sound.createAsync(
+          { uri: dirURI },
           { shouldPlay: false, volume: 0.5 }
         )).sound;
       }
@@ -233,14 +265,11 @@ export default function App() {
     try {
       // Get current heading at time of playing directional sound
       const hdg = currentHeading.current;
-      const panValue = Math.sin(hdg * Math.PI / 180);
-      const correctedPan = -panValue;
-      
-      // Map pan value (-1 to 1) to sound index (0 to 120) for 121 different positions
-      const index = Math.round((correctedPan + 1) * 60);
-      const soundIndex = Math.max(0, Math.min(120, index));
-      
-      const sound = dirSounds.current[soundIndex];
+
+      // Use heading directly as a 0-359 index for rough 3D spatialisation
+      const angleIndex = Math.round(hdg) % 360;
+
+      const sound = dirSounds.current[angleIndex];
       if (sound) {
         const status = await sound.getStatusAsync();
         if (!status?.isPlaying) {
