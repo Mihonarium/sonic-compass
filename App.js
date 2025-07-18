@@ -101,10 +101,10 @@ export default function App() {
   const [status, setStatus] = useState('Initializing...');
   const [showDropdown, setShowDropdown] = useState(false);
   const [questionSoundEnabled, setQuestionSoundEnabled] = useState(false);
+  const [calibrationOffset, setCalibrationOffset] = useState(0);
+  const [calibrating, setCalibrating] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [vibrationMode, setVibrationMode] = useState(false);
-
-  // Ref to hold latest vibration mode for callbacks
-  const vibrationModeRef = useRef(false);
 
   // ----- REFS ----------------------------------------------------------------
   const rotRef = useRef(0);
@@ -118,6 +118,11 @@ export default function App() {
   const northSoundPlaying = useRef(false);
   const pulseRef = useRef(null);
   const questionTimeoutRef = useRef(null);
+  const rawHeadingRef = useRef(0);
+  const calibrationOffsetRef = useRef(0);
+  const calibrationStartRef = useRef(0);
+  const calibrationTimeoutRef = useRef(null);
+  const vibrationModeRef = useRef(false);
 
   // ----- AUDIO FUNCTIONS -----------------------------------------------------
   const initAudio = async () => {
@@ -318,7 +323,9 @@ export default function App() {
 
   // ----- COMPASS FUNCTIONS ---------------------------------------------------
   const updateCompass = (hdg) => {
-    const roundedHeading = Math.round(hdg * 10) / 10;
+    rawHeadingRef.current = hdg;
+    const calibrated = (hdg - calibrationOffsetRef.current + 360) % 360;
+    const roundedHeading = Math.round(calibrated * 10) / 10;
     currentHeading.current = roundedHeading;
     
     const target = -roundedHeading;
@@ -430,6 +437,32 @@ export default function App() {
     }
   };
 
+
+  const resetCalibration = () => {
+    calibrationOffsetRef.current = 0;
+    setCalibrationOffset(0);
+    setStatus('Calibration reset');
+  };
+  
+  const startCalibration = () => {
+    if (calibrating) return;
+    setCalibrating(true);
+    setStatus('Put the phone in your pocket now...');
+    calibrationStartRef.current = rawHeadingRef.current;
+    if (calibrationTimeoutRef.current) {
+      clearTimeout(calibrationTimeoutRef.current);
+    }
+    calibrationTimeoutRef.current = setTimeout(() => {
+      const end = rawHeadingRef.current;
+      let diff = end - calibrationStartRef.current;
+      diff = (diff + 360) % 360;
+      calibrationOffsetRef.current = diff;
+      setCalibrationOffset(diff);
+      setCalibrating(false);
+      setStatus('Added offset!');
+    }, 5000);
+  };
+
   // ----- SIDE-EFFECTS --------------------------------------------------------
   useEffect(() => {
     ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
@@ -453,6 +486,9 @@ export default function App() {
       northSound.current?.unloadAsync();
       questionSound.current?.unloadAsync();
       Object.values(dirSounds.current).forEach(sound => sound?.unloadAsync());
+      if (calibrationTimeoutRef.current) {
+        clearTimeout(calibrationTimeoutRef.current);
+      }
     };
   }, []);
 
@@ -666,24 +702,13 @@ export default function App() {
             />
           </View>
         </View>
-
-        {/* Vibration Mode Toggle */}
-        <View style={styles.settingBox}>
-          <View style={styles.switchRow}>
-            <View>
-              <Text style={styles.settingLabel}>Vibration Mode</Text>
-              <Text style={styles.settingDescription}>
-                Vibrate on North, no sounds
-              </Text>
-            </View>
-            <Switch
-              value={vibrationMode}
-              onValueChange={setVibrationMode}
-              trackColor={{ false: '#475569', true: '#3B82F6' }}
-              thumbColor={vibrationMode ? '#fff' : '#f4f4f4'}
-            />
-          </View>
-        </View>
+        
+        <TouchableOpacity
+          style={styles.advancedButton}
+          onPress={() => setShowAdvanced(true)}
+        >
+          <Text style={styles.advancedButtonText}>Advanced</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Status */}
@@ -724,6 +749,104 @@ export default function App() {
                 </TouchableOpacity>
               ))}
             </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+      <Modal
+        visible={showAdvanced}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowAdvanced(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowAdvanced(false)}
+        >
+          <View style={styles.modalContent}>
+            <View style={styles.settingBox}>
+              <Text style={styles.settingLabel}>Add Offset</Text>
+              <View style={styles.switchRow}>
+                <View>
+                    <Text style={styles.settingDescription}>
+                      If you want to keep the phone in a pocket. Hold the phone in front of you, facing exactly forward; press Add Offset; then you'll have 5s to put the phone in a pocket.
+                    </Text>
+                  {calibrationOffset > 0 && !calibrating && (
+                    <Text style={styles.settingDescriptionBold}>
+                      Offset: {calibrationOffset.toFixed(1)}°
+                    </Text>
+                  )}
+                  {(calibrating) && (
+                    <Text style={styles.settingDescriptionBold}>
+                      Place the phone where you'll keep it, then don't move for 5s.
+                    </Text>
+                  )}
+                </View>
+              </View>
+              <TouchableOpacity
+                style={[
+                  styles.calibrateButton,
+                  calibrating && styles.calibrateButtonDisabled,
+                ]}
+                onPress={startCalibration}
+                disabled={calibrating}
+              >
+                <Text style={styles.calibrateButtonText}>
+                  {calibrating ? 'Put the phone in a pocket...' : 'Add Offset'}
+                </Text>
+              </TouchableOpacity>
+              {!calibrating && calibrationOffset !== 0 && <TouchableOpacity
+                style={[
+                  styles.calibrateButton,
+                  styles.closeButton,
+                ]}
+                onPress={resetCalibration}
+                disabled={calibrationOffset === 0}
+              >
+                <Text style={styles.calibrateButtonText}>
+                  Reset Offset
+                </Text>
+              </TouchableOpacity> }
+            </View>
+          </View>
+          
+
+          {/* Vibration Mode Toggle */}
+          <View style={styles.modalContent}>
+            <View style={styles.settingBox}>
+              <View style={styles.switchRow}>
+                <View>
+                  <Text style={styles.settingLabel}>Vibration Mode</Text>
+                  <Text style={styles.settingDescription}>
+                    Vibrate on North, no sounds
+                  </Text>
+                </View>
+                <Switch
+                  value={vibrationMode}
+                  onValueChange={setVibrationMode}
+                  trackColor={{ false: '#475569', true: '#3B82F6' }}
+                  thumbColor={vibrationMode ? '#fff' : '#f4f4f4'}
+                />
+              </View>
+            </View>
+          </View>
+          <View style={styles.modalContent}>
+            <View style={styles.settingBox}>
+              <Text style={styles.settingLabel}>Calibrate Compass</Text>
+              <View style={styles.switchRow}>
+                <View>
+                  <Text style={styles.settingDescription}>
+                    To improve the calibration of the compass, slowly rotate your phone along all three axis multiple times. 
+                  </Text>
+                </View>
+              </View>
+            </View>
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={() => setShowAdvanced(false)}
+            >
+              <Text style={styles.closeButtonText}>Close</Text>
+            </TouchableOpacity>
           </View>
         </TouchableOpacity>
       </Modal>
@@ -813,6 +936,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginTop: 2,
   },
+  settingDescriptionBold: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 13,
+    marginTop: 2,
+    fontWeight: 'bold',
+  },
   dropdownButton: {
     backgroundColor: 'rgba(248,250,252,0.1)',
     borderWidth: 1,
@@ -837,9 +966,10 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.7)',
     justifyContent: 'center',
     alignItems: 'center',
+    gap: 12,
   },
   modalContent: {
     width: '80%',
@@ -882,6 +1012,21 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
+  calibrateButton: {
+    backgroundColor: '#3B82F6',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    marginTop: 6,
+  },
+  calibrateButtonDisabled: {
+    backgroundColor: '#475569',
+  },
+  calibrateButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
   status: {
     position: 'absolute',
     bottom: 40,
@@ -889,5 +1034,31 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: 'rgba(255,255,255,0.7)',
     fontSize: 14,
+  },
+  advancedButton: {
+    backgroundColor: '#64748B',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    marginTop: 10,
+    alignItems: 'center',
+  },
+  advancedButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  closeButton: {
+    backgroundColor: '#475569',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    marginTop: 16,
+    alignItems: 'center',
+  },
+  closeButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
