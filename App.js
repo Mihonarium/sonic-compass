@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet, View, Text, TouchableOpacity,
-  Alert, AppState, Dimensions, ScrollView, Switch, Modal
+  Alert, AppState, Dimensions, ScrollView, Switch, Modal, Vibration
 } from 'react-native';
 import { Audio, InterruptionModeIOS, InterruptionModeAndroid } from 'expo-av';
 import CompassHeading from 'react-native-compass-heading';
@@ -102,6 +102,7 @@ export default function App() {
   const [calibrationOffset, setCalibrationOffset] = useState(0);
   const [calibrating, setCalibrating] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [vibrationMode, setVibrationMode] = useState(false);
 
   // ----- REFS ----------------------------------------------------------------
   const rotRef = useRef(0);
@@ -192,6 +193,10 @@ export default function App() {
       northSoundPlaying.current = false;
     }
   };
+const vibrateNorth = () => {
+  lastNorthSoundTime.current = Date.now();
+  Vibration.vibrate([0,40,60,40]);
+};
 
   const playQuestionSound = async () => {
     try {
@@ -331,8 +336,13 @@ export default function App() {
       if (pulseRef.current) {
         pulseRef.current.setNativeProps({ style: { opacity: 0.4 } });
       }
-      stopSilentSound();
-      playNorth();
+      if (vibrationMode) {
+        startSilentSound();
+        vibrateNorth();
+      } else {
+        stopSilentSound();
+        playNorth();
+      }
     } else if (!northNow && north) {
       setNorth(false);
       if (pulseRef.current) {
@@ -665,6 +675,24 @@ export default function App() {
               trackColor={{ false: '#475569', true: '#3B82F6' }}
               thumbColor={questionSoundEnabled ? '#fff' : '#f4f4f4'}
               disabled={freq === 0}
+            />
+          </View>
+        </View>
+
+        {/* Vibration Mode Toggle */}
+        <View style={styles.settingBox}>
+          <View style={styles.switchRow}>
+            <View>
+              <Text style={styles.settingLabel}>Vibration Mode</Text>
+              <Text style={styles.settingDescription}>
+                Vibrate instead of sound when facing north
+              </Text>
+            </View>
+            <Switch
+              value={vibrationMode}
+              onValueChange={setVibrationMode}
+              trackColor={{ false: '#475569', true: '#3B82F6' }}
+              thumbColor={vibrationMode ? '#fff' : '#f4f4f4'}
             />
           </View>
         </View>
