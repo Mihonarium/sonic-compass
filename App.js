@@ -695,7 +695,7 @@ export default function App() {
       {/* Settings */}
       <View style={styles.settingsContainer}>
         <View style={styles.settingBox}>
-          <Text style={styles.settingLabel}>Direction Sound Frequency</Text>
+          <Text style={styles.settingLabel}>🎧 Direction Sound Frequency</Text>
           
           <TouchableOpacity 
             style={styles.dropdownButton} 
@@ -785,6 +785,45 @@ export default function App() {
           activeOpacity={1}
           onPress={() => setShowAdvanced(false)}
         >
+          
+
+          {/* Vibration Mode Toggle */}
+          <View style={styles.modalContent}>
+            <View style={styles.settingBox}>
+              <View style={styles.switchRow}>
+                <View>
+                  <Text style={styles.settingLabel}>Vibration Mode</Text>
+                  <Text style={styles.settingDescription}>
+                    Vibrate on North.
+                  </Text>
+                </View>
+                <Switch
+                  value={vibrationMode}
+                  onValueChange={setVibrationMode}
+                  trackColor={{ false: '#475569', true: '#3B82F6' }}
+                  thumbColor={vibrationMode ? '#fff' : '#f4f4f4'}
+                />
+              </View>
+            </View>
+          </View>
+
+          
+
+          <View style={styles.modalContent}>
+            <View style={styles.settingBox}>
+              <Text style={styles.settingLabel}>Calibrate Compass</Text>
+              <View style={styles.switchRow}>
+                <View>
+                  <Text style={styles.settingDescription}>
+                    To improve the calibration of the compass, slowly rotate your phone along all three axis multiple times. 
+                  </Text>
+                </View>
+              </View>
+            </View>
+          </View>
+
+          
+          {/* Offset Calibration */}
           <View style={styles.modalContent}>
             <View style={styles.settingBox}>
               <Text style={styles.settingLabel}>Add Offset</Text>
@@ -829,39 +868,6 @@ export default function App() {
                   Reset Offset
                 </Text>
               </TouchableOpacity> }
-            </View>
-          </View>
-          
-
-          {/* Vibration Mode Toggle */}
-          <View style={styles.modalContent}>
-            <View style={styles.settingBox}>
-              <View style={styles.switchRow}>
-                <View>
-                  <Text style={styles.settingLabel}>Vibration Mode</Text>
-                  <Text style={styles.settingDescription}>
-                    Vibrate on North, keep directional sounds
-                  </Text>
-                </View>
-                <Switch
-                  value={vibrationMode}
-                  onValueChange={setVibrationMode}
-                  trackColor={{ false: '#475569', true: '#3B82F6' }}
-                  thumbColor={vibrationMode ? '#fff' : '#f4f4f4'}
-                />
-              </View>
-            </View>
-          </View>
-          <View style={styles.modalContent}>
-            <View style={styles.settingBox}>
-              <Text style={styles.settingLabel}>Calibrate Compass</Text>
-              <View style={styles.switchRow}>
-                <View>
-                  <Text style={styles.settingDescription}>
-                    To improve the calibration of the compass, slowly rotate your phone along all three axis multiple times. 
-                  </Text>
-                </View>
-              </View>
             </View>
             <TouchableOpacity
               style={styles.closeButton}
