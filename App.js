@@ -55,6 +55,43 @@ const sineBuffer = (freq, durSec, panValue = 0) => {
   return buf;
 };
 
+// Maximum interaural time difference used for simple spatialization
+const MAX_ITD = 0.0007;
+
+// Create a stereo buffer with basic ILD/ITD cues.
+// azimuthRad: 0 = front, PI = back
+const spatialSineBuffer = (freq, durSec, azimuthRad = 0) => {
+  const frames = durSec * SAMPLE_RATE;
+  const buf = new Float32Array(frames * 2);
+
+  const itd = Math.sin(azimuthRad) * MAX_ITD;
+  const itdFrames = Math.round(itd * SAMPLE_RATE);
+  const leftDelay = Math.max(0, -itdFrames);
+  const rightDelay = Math.max(0, itdFrames);
+
+  const ild = Math.sin(azimuthRad) * 0.5;
+  const leftBase = 1 - ild;
+  const rightBase = 1 + ild;
+
+  const behind = azimuthRad > Math.PI / 2 && azimuthRad < 3 * Math.PI / 2;
+  const fbAtten = behind ? 0.7 : 1;
+
+  for (let i = 0; i < frames; i++) {
+    const t = i / SAMPLE_RATE;
+    const fade = Math.min(1, t / 0.02, (durSec - t) / 0.02);
+    let sample = fade * Math.sin(2 * Math.PI * freq * t) * 0.3;
+    if (behind) {
+      sample *= 0.7 + 0.3 * Math.cos(2 * Math.PI * freq * t);
+    }
+
+    const lIdx = i + leftDelay;
+    const rIdx = i + rightDelay;
+    if (lIdx < frames) buf[lIdx * 2] += sample * leftBase * fbAtten;
+    if (rIdx < frames) buf[rIdx * 2 + 1] += sample * rightBase * fbAtten;
+  }
+  return buf;
+};
+
 const pcm16Stereo = float32 => {
   const out = new Int16Array(float32.length);
   for (let i = 0; i < float32.length; i++) {
@@ -173,17 +210,12 @@ export default function App() {
         { shouldPlay: false, volume: 0.5 }
       )).sound;
 
-      // Create directional sounds with MANY pan values for extremely precise directionality
-      const panValues = [];
-      for (let i = 0; i <= 120; i++) {
-        panValues.push(-1.0 + (i * (2 / 120)));
-      }
-      
-      for (let i = 0; i < panValues.length; i++) {
-        const panValue = panValues[i];
-        const dirURI = await writeWav(`dir_${i}.wav`, sineBuffer(440, 0.25, panValue));
-        dirSounds.current[i] = (await Audio.Sound.createAsync(
-          { uri: dirURI }, 
+      // Create directional sounds for each degree using simple spatial cues
+      for (let deg = 0; deg < 360; deg++) {
+        const az = deg * Math.PI / 180;
+        const dirURI = await writeWav(`dir_${deg}.wav`, spatialSineBuffer(440, 0.25, az));
+        dirSounds.current[deg] = (await Audio.Sound.createAsync(
+          { uri: dirURI },
           { shouldPlay: false, volume: 0.5 }
         )).sound;
       }
@@ -233,14 +265,8 @@ export default function App() {
     try {
       // Get current heading at time of playing directional sound
       const hdg = currentHeading.current;
-      const panValue = Math.sin(hdg * Math.PI / 180);
-      const correctedPan = -panValue;
-      
-      // Map pan value (-1 to 1) to sound index (0 to 120) for 121 different positions
-      const index = Math.round((correctedPan + 1) * 60);
-      const soundIndex = Math.max(0, Math.min(120, index));
-      
-      const sound = dirSounds.current[soundIndex];
+      const az = Math.round((360 - hdg) % 360); // direction to north
+      const sound = dirSounds.current[az];
       if (sound) {
         const status = await sound.getStatusAsync();
         if (!status?.isPlaying) {
