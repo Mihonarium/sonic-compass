@@ -104,7 +104,6 @@ export default function App() {
   const [questionSoundEnabled, setQuestionSoundEnabled] = useState(false);
   const [calibrationOffset, setCalibrationOffset] = useState(0);
   const [calibrating, setCalibrating] = useState(false);
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const [vibrationMode, setVibrationMode] = useState(false);
   //const [lowPower, setLowPower] = useState(false);
 
@@ -693,45 +692,86 @@ export default function App() {
       </View>
 
       {/* Settings */}
-      <View style={styles.settingsContainer}>
-        <View style={styles.settingBox}>
-          <Text style={styles.settingLabel}>🎧 Direction Sound Frequency</Text>
-          
-          <TouchableOpacity 
-            style={styles.dropdownButton} 
-            onPress={() => setShowDropdown(!showDropdown)}
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+        <View style={styles.settingsGrid}>
+          <TouchableOpacity
+            style={[
+              styles.settingPanel,
+              questionSoundEnabled && styles.panelOn,
+            ]}
+            onPress={() => setQuestionSoundEnabled(!questionSoundEnabled)}
           >
-            <Text style={styles.dropdownButtonText}>{freqTxt()}</Text>
-            <Text style={styles.dropdownArrow}>{showDropdown ? '▲' : '▼'}</Text>
+            <Text style={styles.panelLabel}>Learning</Text>
+            <Text style={styles.panelValue}>{questionSoundEnabled ? 'On' : 'Off'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.settingPanel, vibrationMode && styles.panelOn]}
+            onPress={() => setVibrationMode(!vibrationMode)}
+          >
+            <Text style={styles.panelLabel}>Vibration</Text>
+            <Text style={styles.panelValue}>{vibrationMode ? 'On' : 'Off'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.settingPanel}
+            onPress={() => setShowDropdown(true)}
+          >
+            <Text style={styles.panelLabel}>Frequency</Text>
+            <Text style={styles.panelValue}>{freqTxt()}</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Learning Mode Toggle */}
-        <View style={styles.settingBox}>
-          <View style={styles.switchRow}>
-            <View>
-              <Text style={styles.settingLabel}>Learning Mode</Text>
-              <Text style={styles.settingDescription}>
-                Plays a cue sound 1s before direction
-              </Text>
+        <View style={styles.advancedSection}>
+          <View style={styles.settingBox}>
+            <Text style={styles.settingLabel}>Calibrate Compass</Text>
+            <View style={styles.switchRow}>
+              <View>
+                <Text style={styles.settingDescription}>
+                  To improve the calibration of the compass, slowly rotate your phone along all three axis multiple times.
+                </Text>
+              </View>
             </View>
-            <Switch
-              value={questionSoundEnabled}
-              onValueChange={setQuestionSoundEnabled}
-              trackColor={{ false: '#475569', true: '#3B82F6' }}
-              thumbColor={questionSoundEnabled ? '#fff' : '#f4f4f4'}
-              disabled={freq === 0}
-            />
+          </View>
+
+          <View style={styles.settingBox}>
+            <Text style={styles.settingLabel}>Add Offset</Text>
+            <View style={styles.switchRow}>
+              <View>
+                <Text style={styles.settingDescription}>
+                  If you want to keep the phone in a pocket. Hold the phone in front of you, facing exactly forward; press Add Offset; then you'll have 5s to put the phone in a pocket.
+                </Text>
+                {calibrationOffset > 0 && !calibrating && (
+                  <Text style={styles.settingDescriptionBold}>
+                    Offset: {calibrationOffset.toFixed(1)}°
+                  </Text>
+                )}
+                {calibrating && (
+                  <Text style={styles.settingDescriptionBold}>
+                    Place the phone where you'll keep it, then don't move for 5s.
+                  </Text>
+                )}
+              </View>
+            </View>
+            <TouchableOpacity
+              style={[styles.calibrateButton, calibrating && styles.calibrateButtonDisabled]}
+              onPress={startCalibration}
+              disabled={calibrating}
+            >
+              <Text style={styles.calibrateButtonText}>
+                {calibrating ? 'Put the phone in a pocket...' : 'Add Offset'}
+              </Text>
+            </TouchableOpacity>
+            {!calibrating && calibrationOffset !== 0 && (
+              <TouchableOpacity
+                style={[styles.calibrateButton, styles.closeButton]}
+                onPress={resetCalibration}
+                disabled={calibrationOffset === 0}
+              >
+                <Text style={styles.calibrateButtonText}>Reset Offset</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
-        
-        <TouchableOpacity
-          style={styles.advancedButton}
-          onPress={() => setShowAdvanced(true)}
-        >
-          <Text style={styles.advancedButtonText}>Advanced</Text>
-        </TouchableOpacity>
-      </View>
+      </ScrollView>
 
       {/* Status */}
       <Text style={styles.status}>{status}</Text>
@@ -771,110 +811,6 @@ export default function App() {
                 </TouchableOpacity>
               ))}
             </ScrollView>
-          </View>
-        </TouchableOpacity>
-      </Modal>
-      <Modal
-        visible={showAdvanced}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowAdvanced(false)}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowAdvanced(false)}
-        >
-          
-
-          {/* Vibration Mode Toggle */}
-          <View style={styles.modalContent}>
-            <View style={styles.settingBox}>
-              <View style={styles.switchRow}>
-                <View>
-                  <Text style={styles.settingLabel}>Vibration Mode</Text>
-                  <Text style={styles.settingDescription}>
-                    Vibrate on North.
-                  </Text>
-                </View>
-                <Switch
-                  value={vibrationMode}
-                  onValueChange={setVibrationMode}
-                  trackColor={{ false: '#475569', true: '#3B82F6' }}
-                  thumbColor={vibrationMode ? '#fff' : '#f4f4f4'}
-                />
-              </View>
-            </View>
-          </View>
-
-          
-
-          <View style={styles.modalContent}>
-            <View style={styles.settingBox}>
-              <Text style={styles.settingLabel}>Calibrate Compass</Text>
-              <View style={styles.switchRow}>
-                <View>
-                  <Text style={styles.settingDescription}>
-                    To improve the calibration of the compass, slowly rotate your phone along all three axis multiple times. 
-                  </Text>
-                </View>
-              </View>
-            </View>
-          </View>
-
-          
-          {/* Offset Calibration */}
-          <View style={styles.modalContent}>
-            <View style={styles.settingBox}>
-              <Text style={styles.settingLabel}>Add Offset</Text>
-              <View style={styles.switchRow}>
-                <View>
-                    <Text style={styles.settingDescription}>
-                      If you want to keep the phone in a pocket. Hold the phone in front of you, facing exactly forward; press Add Offset; then you'll have 5s to put the phone in a pocket.
-                    </Text>
-                  {calibrationOffset > 0 && !calibrating && (
-                    <Text style={styles.settingDescriptionBold}>
-                      Offset: {calibrationOffset.toFixed(1)}°
-                    </Text>
-                  )}
-                  {(calibrating) && (
-                    <Text style={styles.settingDescriptionBold}>
-                      Place the phone where you'll keep it, then don't move for 5s.
-                    </Text>
-                  )}
-                </View>
-              </View>
-              <TouchableOpacity
-                style={[
-                  styles.calibrateButton,
-                  calibrating && styles.calibrateButtonDisabled,
-                ]}
-                onPress={startCalibration}
-                disabled={calibrating}
-              >
-                <Text style={styles.calibrateButtonText}>
-                  {calibrating ? 'Put the phone in a pocket...' : 'Add Offset'}
-                </Text>
-              </TouchableOpacity>
-              {!calibrating && calibrationOffset !== 0 && <TouchableOpacity
-                style={[
-                  styles.calibrateButton,
-                  styles.closeButton,
-                ]}
-                onPress={resetCalibration}
-                disabled={calibrationOffset === 0}
-              >
-                <Text style={styles.calibrateButtonText}>
-                  Reset Offset
-                </Text>
-              </TouchableOpacity> }
-            </View>
-            <TouchableOpacity
-              style={styles.closeButton}
-              onPress={() => setShowAdvanced(false)}
-            >
-              <Text style={styles.closeButtonText}>Close</Text>
-            </TouchableOpacity>
           </View>
         </TouchableOpacity>
       </Modal>
@@ -936,10 +872,6 @@ const styles = StyleSheet.create({
     fontSize: 24,
     color: 'rgba(255,255,255,0.8)',
     marginTop: 8,
-  },
-  settingsContainer: {
-    width: '90%',
-    gap: 12,
   },
   settingBox: {
     width: '100%',
@@ -1063,18 +995,45 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.7)',
     fontSize: 14,
   },
-  advancedButton: {
-    backgroundColor: '#64748B',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
+  scroll: {
+    flex: 1,
+    width: '100%',
+  },
+  scrollContent: {
+    alignItems: 'center',
+    paddingBottom: 120,
+  },
+  settingsGrid: {
+    width: '90%',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  settingPanel: {
+    width: '48%',
+    padding: 15,
+    backgroundColor: 'rgba(30,45,70,0.5)',
     borderRadius: 8,
-    marginTop: 10,
     alignItems: 'center',
   },
-  advancedButtonText: {
+  panelOn: {
+    backgroundColor: 'rgba(34,197,94,0.3)',
+  },
+  panelLabel: {
+    color: '#fff',
+    fontSize: 14,
+    marginBottom: 6,
+  },
+  panelValue: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  advancedSection: {
+    width: '90%',
+    marginTop: 20,
+    gap: 12,
   },
   closeButton: {
     backgroundColor: '#475569',
@@ -1083,10 +1042,5 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginTop: 16,
     alignItems: 'center',
-  },
-  closeButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
   },
 });
