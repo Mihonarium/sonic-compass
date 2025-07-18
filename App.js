@@ -184,7 +184,7 @@ export default function App() {
     lastNorthSoundTime.current = Date.now();
     try {
       if (vibrationModeRef.current) {
-        // note that this only works when low battery mode is not enabled and taptic egnine is on
+        // note that this only works when low battery mode is not enabled and the taptic engine is on
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Hard);
       } else if (!northSoundPlaying.current) {
         northSoundPlaying.current = true;
