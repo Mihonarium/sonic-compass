@@ -693,43 +693,40 @@ export default function App() {
       </View>
 
       {/* Settings */}
-      <View style={styles.settingsContainer}>
-        <View style={styles.settingBox}>
-          <Text style={styles.settingLabel}>🎧 Direction Sound Frequency</Text>
-          
-          <TouchableOpacity 
-            style={styles.dropdownButton} 
-            onPress={() => setShowDropdown(!showDropdown)}
-          >
-            <Text style={styles.dropdownButtonText}>{freqTxt()}</Text>
-            <Text style={styles.dropdownArrow}>{showDropdown ? '▲' : '▼'}</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Learning Mode Toggle */}
-        <View style={styles.settingBox}>
-          <View style={styles.switchRow}>
-            <View>
-              <Text style={styles.settingLabel}>Learning Mode</Text>
-              <Text style={styles.settingDescription}>
-                Plays a cue sound 1s before direction
-              </Text>
-            </View>
-            <Switch
-              value={questionSoundEnabled}
-              onValueChange={setQuestionSoundEnabled}
-              trackColor={{ false: '#475569', true: '#3B82F6' }}
-              thumbColor={questionSoundEnabled ? '#fff' : '#f4f4f4'}
-              disabled={freq === 0}
-            />
-          </View>
-        </View>
-        
+      <View style={styles.settingsGrid}>
         <TouchableOpacity
-          style={styles.advancedButton}
+          style={styles.gridItem}
+          onPress={() => setShowDropdown(!showDropdown)}
+        >
+          <Text style={styles.gridLabel}>Direction Freq</Text>
+          <Text style={styles.gridValue}>{freqTxt()}</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.gridItem,
+            questionSoundEnabled && styles.gridItemActive,
+          ]}
+          onPress={() => setQuestionSoundEnabled(!questionSoundEnabled)}
+          disabled={freq === 0}
+        >
+          <Text style={styles.gridLabel}>Learning</Text>
+          <Text style={styles.gridValue}>{questionSoundEnabled ? 'On' : 'Off'}</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.gridItem, vibrationMode && styles.gridItemActive]}
+          onPress={() => setVibrationMode(!vibrationMode)}
+        >
+          <Text style={styles.gridLabel}>Vibration</Text>
+          <Text style={styles.gridValue}>{vibrationMode ? 'On' : 'Off'}</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.gridItem}
           onPress={() => setShowAdvanced(true)}
         >
-          <Text style={styles.advancedButtonText}>Advanced</Text>
+          <Text style={styles.gridLabel}>Advanced</Text>
         </TouchableOpacity>
       </View>
 
@@ -1072,6 +1069,38 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   advancedButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  settingsGrid: {
+    width: '90%',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  gridItem: {
+    width: '48%',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.3)',
+    borderRadius: 8,
+    backgroundColor: 'rgba(30,45,70,0.5)',
+    marginBottom: 10,
+    alignItems: 'center',
+  },
+  gridItemActive: {
+    backgroundColor: 'rgba(34,197,94,0.2)',
+    borderColor: '#22c55e',
+  },
+  gridLabel: {
+    color: '#fff',
+    fontSize: 14,
+    marginBottom: 4,
+  },
+  gridValue: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
