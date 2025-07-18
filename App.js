@@ -693,43 +693,36 @@ export default function App() {
       </View>
 
       {/* Settings */}
-      <View style={styles.settingsContainer}>
-        <View style={styles.settingBox}>
-          <Text style={styles.settingLabel}>🎧 Direction Sound Frequency</Text>
-          
-          <TouchableOpacity 
-            style={styles.dropdownButton} 
-            onPress={() => setShowDropdown(!showDropdown)}
-          >
-            <Text style={styles.dropdownButtonText}>{freqTxt()}</Text>
-            <Text style={styles.dropdownArrow}>{showDropdown ? '▲' : '▼'}</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Learning Mode Toggle */}
-        <View style={styles.settingBox}>
-          <View style={styles.switchRow}>
-            <View>
-              <Text style={styles.settingLabel}>Learning Mode</Text>
-              <Text style={styles.settingDescription}>
-                Plays a cue sound 1s before direction
-              </Text>
-            </View>
-            <Switch
-              value={questionSoundEnabled}
-              onValueChange={setQuestionSoundEnabled}
-              trackColor={{ false: '#475569', true: '#3B82F6' }}
-              thumbColor={questionSoundEnabled ? '#fff' : '#f4f4f4'}
-              disabled={freq === 0}
-            />
-          </View>
-        </View>
-        
+      <View style={styles.settingsGrid}>
         <TouchableOpacity
-          style={styles.advancedButton}
+          style={styles.panel}
+          onPress={() => setShowDropdown(true)}
+        >
+          <Text style={styles.panelLabel}>Frequency</Text>
+          <Text style={styles.panelValue}>{freqTxt()}</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.panel, questionSoundEnabled && styles.panelActive]}
+          onPress={() => setQuestionSoundEnabled(!questionSoundEnabled)}
+        >
+          <Text style={styles.panelLabel}>Learning</Text>
+          <Text style={styles.panelValue}>{questionSoundEnabled ? 'On' : 'Off'}</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.panel, vibrationMode && styles.panelActive]}
+          onPress={() => setVibrationMode(!vibrationMode)}
+        >
+          <Text style={styles.panelLabel}>Vibrate</Text>
+          <Text style={styles.panelValue}>{vibrationMode ? 'On' : 'Off'}</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.panel}
           onPress={() => setShowAdvanced(true)}
         >
-          <Text style={styles.advancedButtonText}>Advanced</Text>
+          <Text style={styles.panelLabel}>More</Text>
         </TouchableOpacity>
       </View>
 
@@ -937,8 +930,11 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.8)',
     marginTop: 8,
   },
-  settingsContainer: {
+  settingsGrid: {
     width: '90%',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
     gap: 12,
   },
   settingBox: {
@@ -947,6 +943,29 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(30,45,70,0.5)',
     borderRadius: 8,
     alignItems: 'center',
+  },
+  panel: {
+    width: '48%',
+    paddingVertical: 16,
+    backgroundColor: 'rgba(30,45,70,0.5)',
+    borderRadius: 8,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.3)',
+  },
+  panelActive: {
+    backgroundColor: 'rgba(34,197,94,0.3)',
+    borderColor: '#22c55e',
+  },
+  panelLabel: {
+    color: '#fff',
+    fontSize: 14,
+  },
+  panelValue: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: 4,
   },
   switchRow: {
     width: '100%',
@@ -1062,19 +1081,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: 'rgba(255,255,255,0.7)',
     fontSize: 14,
-  },
-  advancedButton: {
-    backgroundColor: '#64748B',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    marginTop: 10,
-    alignItems: 'center',
-  },
-  advancedButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
   },
   closeButton: {
     backgroundColor: '#475569',
