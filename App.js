@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet, View, Text, TouchableOpacity,
-  Alert, AppState, Dimensions, ScrollView, Switch, Modal
+  Alert, AppState, Dimensions, ScrollView, Switch, Modal,
+  Vibration
 } from 'react-native';
 import { Audio, InterruptionModeIOS, InterruptionModeAndroid } from 'expo-av';
 import CompassHeading from 'react-native-compass-heading';
@@ -102,6 +103,7 @@ export default function App() {
   const [calibrationOffset, setCalibrationOffset] = useState(0);
   const [calibrating, setCalibrating] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [vibrateOnNorth, setVibrateOnNorth] = useState(false);
 
   // ----- REFS ----------------------------------------------------------------
   const rotRef = useRef(0);
@@ -185,11 +187,25 @@ export default function App() {
           northSoundPlaying.current = false;
         }, 300);
         await northSound.current?.replayAsync();
-        
+
       }
     } catch (error) {
       console.error('North sound error:', error);
       northSoundPlaying.current = false;
+    }
+  };
+
+  const vibrateNorth = () => {
+    Vibration.cancel();
+    Vibration.vibrate([0, 40, 60, 40]);
+  };
+
+  const triggerNorthFeedback = async () => {
+    lastNorthSoundTime.current = Date.now();
+    if (vibrateOnNorth) {
+      vibrateNorth();
+    } else {
+      await playNorth();
     }
   };
 
@@ -331,8 +347,12 @@ export default function App() {
       if (pulseRef.current) {
         pulseRef.current.setNativeProps({ style: { opacity: 0.4 } });
       }
-      stopSilentSound();
-      playNorth();
+      if (vibrateOnNorth) {
+        startSilentSound();
+      } else {
+        stopSilentSound();
+      }
+      triggerNorthFeedback();
     } else if (!northNow && north) {
       setNorth(false);
       if (pulseRef.current) {
@@ -665,6 +685,24 @@ export default function App() {
               trackColor={{ false: '#475569', true: '#3B82F6' }}
               thumbColor={questionSoundEnabled ? '#fff' : '#f4f4f4'}
               disabled={freq === 0}
+            />
+          </View>
+        </View>
+
+        {/* Vibrate on North Toggle */}
+        <View style={styles.settingBox}>
+          <View style={styles.switchRow}>
+            <View>
+              <Text style={styles.settingLabel}>Vibrate on North</Text>
+              <Text style={styles.settingDescription}>
+                Replaces the north beep with gentle vibration
+              </Text>
+            </View>
+            <Switch
+              value={vibrateOnNorth}
+              onValueChange={setVibrateOnNorth}
+              trackColor={{ false: '#475569', true: '#3B82F6' }}
+              thumbColor={vibrateOnNorth ? '#fff' : '#f4f4f4'}
             />
           </View>
         </View>
