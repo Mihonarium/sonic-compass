@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet, View, Text, TouchableOpacity,
-  Alert, AppState, Dimensions, ScrollView, Switch, Modal
+  Alert, AppState, Dimensions, ScrollView, Switch, Modal, Vibration
 } from 'react-native';
 import { Audio, InterruptionModeIOS, InterruptionModeAndroid } from 'expo-av';
 import CompassHeading from 'react-native-compass-heading';
@@ -12,6 +12,10 @@ import Svg, { Circle, Line, Text as SvgText, G, Defs, RadialGradient, Stop, Poly
 import { Buffer } from 'buffer';
 
 const { width: screenWidth } = Dimensions.get('window');
+
+// iOS doesn't support vibration patterns. We'll mimic a short double-buzz by
+// triggering two vibrations with a brief delay. Android will also work.
+const NORTH_VIBRATION_DELAY = 150; // ms between buzzes
 
 ////////////////////////////////////////////////////////////////////////////////
 // 1. STATIC CONFIGURATION //////////////////////////////////////////////////////
@@ -99,6 +103,7 @@ export default function App() {
   const [status, setStatus] = useState('Initializing...');
   const [showDropdown, setShowDropdown] = useState(false);
   const [questionSoundEnabled, setQuestionSoundEnabled] = useState(false);
+  const [vibrateNorth, setVibrateNorth] = useState(false);
   const [calibrationOffset, setCalibrationOffset] = useState(0);
   const [calibrating, setCalibrating] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -178,6 +183,11 @@ export default function App() {
 
   const playNorth = async () => {
     lastNorthSoundTime.current = Date.now();
+    if (vibrateNorth) {
+      Vibration.vibrate();
+      setTimeout(() => Vibration.vibrate(), NORTH_VIBRATION_DELAY);
+      return;
+    }
     try {
       if (!northSoundPlaying.current) {
         northSoundPlaying.current = true;
@@ -185,7 +195,7 @@ export default function App() {
           northSoundPlaying.current = false;
         }, 300);
         await northSound.current?.replayAsync();
-        
+
       }
     } catch (error) {
       console.error('North sound error:', error);
@@ -331,7 +341,9 @@ export default function App() {
       if (pulseRef.current) {
         pulseRef.current.setNativeProps({ style: { opacity: 0.4 } });
       }
-      stopSilentSound();
+      if (!vibrateNorth) {
+        stopSilentSound();
+      }
       playNorth();
     } else if (!northNow && north) {
       setNorth(false);
@@ -492,6 +504,15 @@ export default function App() {
       startDirectionSoundTimer();
     }
   }, [questionSoundEnabled]);
+
+  // Ensure silent audio runs when vibration mode is enabled
+  useEffect(() => {
+    if (vibrateNorth) {
+      startSilentSound();
+    } else if (freq === 0 && !north) {
+      stopSilentSound();
+    }
+  }, [vibrateNorth]);
 
   // ----- RENDER --------------------------------------------------------------
   const compassSize = Math.min(screenWidth * 0.8, 300);
@@ -665,6 +686,24 @@ export default function App() {
               trackColor={{ false: '#475569', true: '#3B82F6' }}
               thumbColor={questionSoundEnabled ? '#fff' : '#f4f4f4'}
               disabled={freq === 0}
+            />
+          </View>
+        </View>
+
+        {/* Vibrate on North Toggle */}
+        <View style={styles.settingBox}>
+          <View style={styles.switchRow}>
+            <View>
+              <Text style={styles.settingLabel}>Vibrate on North</Text>
+              <Text style={styles.settingDescription}>
+                Feel a short vibration instead of sound
+              </Text>
+            </View>
+            <Switch
+              value={vibrateNorth}
+              onValueChange={setVibrateNorth}
+              trackColor={{ false: '#475569', true: '#3B82F6' }}
+              thumbColor={vibrateNorth ? '#fff' : '#f4f4f4'}
             />
           </View>
         </View>
