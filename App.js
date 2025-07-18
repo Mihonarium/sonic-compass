@@ -343,6 +343,11 @@ export default function App() {
       setNorth(true);
       if (pulseRef.current) {
         pulseRef.current.setNativeProps({ style: { opacity: 0.4 } });
+        setTimeout(() => {
+          if (pulseRef.current) {
+            pulseRef.current.setNativeProps({ style: { opacity: 0 } });
+          }
+        }, 1000);
       }
       if (!vibrationModeRef.current) {
         stopSilentSound();
