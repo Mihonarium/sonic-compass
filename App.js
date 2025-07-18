@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet, View, Text, TouchableOpacity,
-  Alert, AppState, Dimensions, ScrollView, Switch, Modal,
+  Alert, AppState, Dimensions, ScrollView,
   Vibration
 } from 'react-native';
 import { Audio, InterruptionModeIOS, InterruptionModeAndroid } from 'expo-av';
@@ -11,6 +11,7 @@ import * as Haptics from 'expo-haptics';
 import * as FileSystem from 'expo-file-system';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { LinearGradient } from 'expo-linear-gradient';
+import Slider from '@react-native-community/slider';
 import Svg, { Circle, Line, Text as SvgText, G, Defs, RadialGradient, Stop, Polygon } from 'react-native-svg';
 import { Buffer } from 'buffer';
 
@@ -96,15 +97,14 @@ const writeWav = async (name, floatBuf) => {
 export default function App() {
   // ----- STATE ---------------------------------------------------------------
   const [heading, setHeading] = useState(0);
-  const [freq, setFreq] = useState(0); // Start with Off
+  const [freqIndex, setFreqIndex] = useState(0); // index into FREQ_OPTS
+  const freq = FREQ_OPTS[freqIndex].value;
   const [north, setNorth] = useState(false);
   const [lastDir, setLastDir] = useState(0);
   const [status, setStatus] = useState('Initializing...');
-  const [showDropdown, setShowDropdown] = useState(false);
   const [questionSoundEnabled, setQuestionSoundEnabled] = useState(false);
   const [calibrationOffset, setCalibrationOffset] = useState(0);
   const [calibrating, setCalibrating] = useState(false);
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const [vibrationMode, setVibrationMode] = useState(false);
   //const [lowPower, setLowPower] = useState(false);
 
@@ -433,17 +433,17 @@ export default function App() {
     return dirs[Math.round(deg / 45) % 8];
   };
 
-  const freqTxt = () => FREQ_OPTS.find(o => o.value === freq)?.label || 'Unknown';
-  
-  const selectFrequency = (newFreq) => {
-    setFreq(newFreq);
-    setShowDropdown(false);
-    
+  const freqTxt = () => FREQ_OPTS[freqIndex]?.label || 'Unknown';
+
+  const selectFrequencyIndex = (idx) => {
+    setFreqIndex(idx);
+
     // Stop everything first
     stopDirectionSoundTimer();
     stopSilentSound();
-    
+
     // Restart with new frequency if not Off
+    const newFreq = FREQ_OPTS[idx].value;
     if (newFreq > 0) {
       startDirectionSoundTimer();
     }
@@ -693,191 +693,52 @@ export default function App() {
       </View>
 
       {/* Settings */}
-      <View style={styles.settingsContainer}>
-        <View style={styles.settingBox}>
-          <Text style={styles.settingLabel}>🎧 Direction Sound Frequency</Text>
-          
-          <TouchableOpacity 
-            style={styles.dropdownButton} 
-            onPress={() => setShowDropdown(!showDropdown)}
+      <ScrollView contentContainerStyle={styles.settingsScroll}>
+        <View style={styles.freqPanel}>
+          <Text style={styles.settingLabel}>🎧 Direction Frequency</Text>
+          <Text style={styles.freqValue}>{freqTxt()}</Text>
+          <Slider
+            style={styles.slider}
+            minimumValue={0}
+            maximumValue={FREQ_OPTS.length - 1}
+            step={1}
+            value={freqIndex}
+            onValueChange={selectFrequencyIndex}
+            minimumTrackTintColor="#3B82F6"
+            maximumTrackTintColor="#334155"
+          />
+        </View>
+        <View style={styles.gridRow}>
+          <TouchableOpacity
+            style={[styles.gridItem, questionSoundEnabled && styles.gridItemActive]}
+            onPress={() => setQuestionSoundEnabled(!questionSoundEnabled)}
+            disabled={freq === 0}
           >
-            <Text style={styles.dropdownButtonText}>{freqTxt()}</Text>
-            <Text style={styles.dropdownArrow}>{showDropdown ? '▲' : '▼'}</Text>
+            <Text style={styles.gridText}>Learning Mode</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.gridItem, vibrationMode && styles.gridItemActive]}
+            onPress={() => setVibrationMode(!vibrationMode)}
+          >
+            <Text style={styles.gridText}>Vibration</Text>
           </TouchableOpacity>
         </View>
-
-        {/* Learning Mode Toggle */}
-        <View style={styles.settingBox}>
-          <View style={styles.switchRow}>
-            <View>
-              <Text style={styles.settingLabel}>Learning Mode</Text>
-              <Text style={styles.settingDescription}>
-                Plays a cue sound 1s before direction
-              </Text>
-            </View>
-            <Switch
-              value={questionSoundEnabled}
-              onValueChange={setQuestionSoundEnabled}
-              trackColor={{ false: '#475569', true: '#3B82F6' }}
-              thumbColor={questionSoundEnabled ? '#fff' : '#f4f4f4'}
-              disabled={freq === 0}
-            />
-          </View>
-        </View>
-        
-        <TouchableOpacity
-          style={styles.advancedButton}
-          onPress={() => setShowAdvanced(true)}
-        >
-          <Text style={styles.advancedButtonText}>Advanced</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Status */}
-      <Text style={styles.status}>{status}</Text>
-
-      {/* Dropdown Modal */}
-      <Modal
-        visible={showDropdown}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowDropdown(false)}
-      >
-        <TouchableOpacity 
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowDropdown(false)}
-        >
-          <View style={styles.modalContent}>
-            <ScrollView style={styles.dropdownMenu} nestedScrollEnabled={true}>
-              {FREQ_OPTS.map((option) => (
-                <TouchableOpacity
-                  key={option.value}
-                  style={[
-                    styles.dropdownItem,
-                    freq === option.value && styles.dropdownItemSelected
-                  ]}
-                  onPress={() => selectFrequency(option.value)}
-                >
-                  <Text style={[
-                    styles.dropdownItemText,
-                    freq === option.value && styles.dropdownItemTextSelected
-                  ]}>
-                    {option.label}
-                  </Text>
-                  {freq === option.value && (
-                    <Text style={styles.checkmark}>✓</Text>
-                  )}
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-        </TouchableOpacity>
-      </Modal>
-      <Modal
-        visible={showAdvanced}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowAdvanced(false)}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowAdvanced(false)}
-        >
-          
-
-          {/* Vibration Mode Toggle */}
-          <View style={styles.modalContent}>
-            <View style={styles.settingBox}>
-              <View style={styles.switchRow}>
-                <View>
-                  <Text style={styles.settingLabel}>Vibration Mode</Text>
-                  <Text style={styles.settingDescription}>
-                    Vibrate on North.
-                  </Text>
-                </View>
-                <Switch
-                  value={vibrationMode}
-                  onValueChange={setVibrationMode}
-                  trackColor={{ false: '#475569', true: '#3B82F6' }}
-                  thumbColor={vibrationMode ? '#fff' : '#f4f4f4'}
-                />
-              </View>
-            </View>
-          </View>
-
-          
-
-          <View style={styles.modalContent}>
-            <View style={styles.settingBox}>
-              <Text style={styles.settingLabel}>Calibrate Compass</Text>
-              <View style={styles.switchRow}>
-                <View>
-                  <Text style={styles.settingDescription}>
-                    To improve the calibration of the compass, slowly rotate your phone along all three axis multiple times. 
-                  </Text>
-                </View>
-              </View>
-            </View>
-          </View>
-
-          
-          {/* Offset Calibration */}
-          <View style={styles.modalContent}>
-            <View style={styles.settingBox}>
-              <Text style={styles.settingLabel}>Add Offset</Text>
-              <View style={styles.switchRow}>
-                <View>
-                    <Text style={styles.settingDescription}>
-                      If you want to keep the phone in a pocket. Hold the phone in front of you, facing exactly forward; press Add Offset; then you'll have 5s to put the phone in a pocket.
-                    </Text>
-                  {calibrationOffset > 0 && !calibrating && (
-                    <Text style={styles.settingDescriptionBold}>
-                      Offset: {calibrationOffset.toFixed(1)}°
-                    </Text>
-                  )}
-                  {(calibrating) && (
-                    <Text style={styles.settingDescriptionBold}>
-                      Place the phone where you'll keep it, then don't move for 5s.
-                    </Text>
-                  )}
-                </View>
-              </View>
-              <TouchableOpacity
-                style={[
-                  styles.calibrateButton,
-                  calibrating && styles.calibrateButtonDisabled,
-                ]}
-                onPress={startCalibration}
-                disabled={calibrating}
-              >
-                <Text style={styles.calibrateButtonText}>
-                  {calibrating ? 'Put the phone in a pocket...' : 'Add Offset'}
-                </Text>
-              </TouchableOpacity>
-              {!calibrating && calibrationOffset !== 0 && <TouchableOpacity
-                style={[
-                  styles.calibrateButton,
-                  styles.closeButton,
-                ]}
-                onPress={resetCalibration}
-                disabled={calibrationOffset === 0}
-              >
-                <Text style={styles.calibrateButtonText}>
-                  Reset Offset
-                </Text>
-              </TouchableOpacity> }
-            </View>
-            <TouchableOpacity
-              style={styles.closeButton}
-              onPress={() => setShowAdvanced(false)}
-            >
-              <Text style={styles.closeButtonText}>Close</Text>
+        <View style={styles.gridRow}>
+          <TouchableOpacity
+            style={[styles.gridItem, calibrating && styles.gridItemDisabled]}
+            onPress={startCalibration}
+            disabled={calibrating}
+          >
+            <Text style={styles.gridText}>{calibrating ? 'Calibrating…' : 'Add Offset'}</Text>
+          </TouchableOpacity>
+          {calibrationOffset !== 0 && (
+            <TouchableOpacity style={styles.gridItem} onPress={resetCalibration}>
+              <Text style={styles.gridText}>Reset Offset ({calibrationOffset.toFixed(1)}°)</Text>
             </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
-      </Modal>
+          )}
+        </View>
+      </ScrollView>
+      <Text style={styles.status}>{status}</Text>
     </LinearGradient>
   );
 }
@@ -1088,5 +949,48 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  settingsScroll: {
+    width: '90%',
+    paddingBottom: 80,
+    gap: 12,
+    alignItems: 'center',
+  },
+  freqPanel: {
+    width: '100%',
+    padding: 15,
+    backgroundColor: 'rgba(30,45,70,0.5)',
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  freqValue: {
+    color: '#fff',
+    fontSize: 20,
+    marginVertical: 8,
+  },
+  slider: {
+    width: '100%',
+  },
+  gridRow: {
+    flexDirection: 'row',
+    width: '100%',
+    gap: 12,
+  },
+  gridItem: {
+    flex: 1,
+    padding: 15,
+    backgroundColor: 'rgba(30,45,70,0.5)',
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  gridItemActive: {
+    backgroundColor: 'rgba(34,197,94,0.4)',
+  },
+  gridItemDisabled: {
+    backgroundColor: 'rgba(71,85,105,0.7)',
+  },
+  gridText: {
+    color: '#fff',
+    fontSize: 16,
   },
 });
