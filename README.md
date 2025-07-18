@@ -97,10 +97,12 @@ eas submit --platform ios
 
 ## Usage
 
-1. Open app and toggle the switch to start compass
-2. Point device north to hear notification sound
-3. Configure direction sound frequency in settings
-4. App continues to work when backgrounded or when other apps are open
+1. Open the app to see the compass
+2. Use the bottom grid to pick a cue Frequency (how often sounds play) and toggle Learning (adds a preview tone) or Vibration
+3. Tap **Advanced ↓** to scroll once for calibration and pocket offset options
+4. Point the device north to hear notification sound
+5. App continues to work when backgrounded or when other apps are open
+6. All buttons provide haptic feedback for accessibility
 
 ## Notes
 
