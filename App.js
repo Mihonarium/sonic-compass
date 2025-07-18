@@ -184,9 +184,8 @@ export default function App() {
     lastNorthSoundTime.current = Date.now();
     try {
       if (vibrationModeRef.current) {
-        // Use haptics for more reliable vibration
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        Vibration.vibrate();
+        // note that this only works when low battery mode is not enabled and taptic egnine is on
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Hard);
       } else if (!northSoundPlaying.current) {
         northSoundPlaying.current = true;
         setTimeout(() => {
