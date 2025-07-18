@@ -14,7 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Line, Text as SvgText, G, Defs, RadialGradient, Stop, Polygon } from 'react-native-svg';
 import { Buffer } from 'buffer';
 
-const { width: screenWidth } = Dimensions.get('window');
+const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 ////////////////////////////////////////////////////////////////////////////////
 // 1. STATIC CONFIGURATION //////////////////////////////////////////////////////
@@ -104,8 +104,9 @@ export default function App() {
   const [questionSoundEnabled, setQuestionSoundEnabled] = useState(false);
   const [calibrationOffset, setCalibrationOffset] = useState(0);
   const [calibrating, setCalibrating] = useState(false);
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const [vibrationMode, setVibrationMode] = useState(false);
+  const [advancedVisible, setAdvancedVisible] = useState(false);
+  const scrollRef = useRef(null);
   //const [lowPower, setLowPower] = useState(false);
 
   // ----- REFS ----------------------------------------------------------------
@@ -435,7 +436,8 @@ export default function App() {
 
   const freqTxt = () => FREQ_OPTS.find(o => o.value === freq)?.label || 'Unknown';
   
-  const selectFrequency = (newFreq) => {
+  const selectFrequency = async (newFreq) => {
+    await Haptics.selectionAsync();
     setFreq(newFreq);
     setShowDropdown(false);
     
@@ -450,14 +452,16 @@ export default function App() {
   };
 
 
-  const resetCalibration = () => {
+  const resetCalibration = async () => {
+    await Haptics.selectionAsync();
     calibrationOffsetRef.current = 0;
     setCalibrationOffset(0);
     setStatus('Calibration reset');
   };
-  
-  const startCalibration = () => {
+
+  const startCalibration = async () => {
     if (calibrating) return;
+    await Haptics.selectionAsync();
     setCalibrating(true);
     setStatus('Put the phone in your pocket now...');
     calibrationStartRef.current = rawHeadingRef.current;
@@ -553,12 +557,33 @@ export default function App() {
   const compassSize = Math.min(screenWidth * 0.8, 300);
   const radius = compassSize / 2;
 
+  const handleScrollEnd = (e) => {
+    const y = e.nativeEvent.contentOffset.y;
+    setAdvancedVisible(y >= screenHeight / 2);
+  };
+
+  const scrollToAdvanced = () => {
+    scrollRef.current?.scrollTo({ y: screenHeight, animated: true });
+  };
+
+  const scrollToMain = () => {
+    scrollRef.current?.scrollTo({ y: 0, animated: true });
+  };
+
   return (
     <LinearGradient colors={['#0f1a2b', '#253b56']} style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.title}>Sonic Compass</Text>
-      </View>
+      <ScrollView
+        ref={scrollRef}
+        pagingEnabled
+        showsVerticalScrollIndicator={false}
+        onMomentumScrollEnd={handleScrollEnd}
+        contentContainerStyle={styles.pagedContent}
+      >
+      <View style={styles.page}>
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.title}>Sonic Compass</Text>
+        </View>
 
       {/* Compass */}
       <View style={[styles.compassWrap, { width: compassSize, height: compassSize }]}>
@@ -692,46 +717,56 @@ export default function App() {
         <Text style={styles.dir}>{dirTxt(heading)}</Text>
       </View>
 
-      {/* Settings */}
-      <View style={styles.settingsContainer}>
-        <View style={styles.settingBox}>
-          <Text style={styles.settingLabel}>🎧 Direction Sound Frequency</Text>
-          
-          <TouchableOpacity 
-            style={styles.dropdownButton} 
-            onPress={() => setShowDropdown(!showDropdown)}
-          >
-            <Text style={styles.dropdownButtonText}>{freqTxt()}</Text>
-            <Text style={styles.dropdownArrow}>{showDropdown ? '▲' : '▼'}</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Learning Mode Toggle */}
-        <View style={styles.settingBox}>
-          <View style={styles.switchRow}>
-            <View>
-              <Text style={styles.settingLabel}>Learning Mode</Text>
-              <Text style={styles.settingDescription}>
-                Plays a cue sound 1s before direction
-              </Text>
-            </View>
-            <Switch
-              value={questionSoundEnabled}
-              onValueChange={setQuestionSoundEnabled}
-              trackColor={{ false: '#475569', true: '#3B82F6' }}
-              thumbColor={questionSoundEnabled ? '#fff' : '#f4f4f4'}
-              disabled={freq === 0}
-            />
-          </View>
-        </View>
-        
+      {/* Quick Settings Grid */}
+      <View style={styles.gridContainer}>
         <TouchableOpacity
-          style={styles.advancedButton}
-          onPress={() => setShowAdvanced(true)}
+          style={[styles.gridItem, freq > 0 && styles.gridItemActive]}
+          onPress={async () => {
+            await Haptics.selectionAsync();
+            setShowDropdown(true);
+          }}
         >
-          <Text style={styles.advancedButtonText}>Advanced</Text>
+          <Text style={styles.gridLabel}>Frequency</Text>
+          <Text style={styles.gridValue}>{freqTxt()}</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.gridItem,
+            questionSoundEnabled && styles.gridItemActive,
+            freq === 0 && styles.gridItemDisabled,
+          ]}
+          onPress={async () => {
+            if (freq === 0) return;
+            await Haptics.selectionAsync();
+            setQuestionSoundEnabled(!questionSoundEnabled);
+          }}
+          disabled={freq === 0}
+        >
+          <Text style={styles.gridLabel}>Learning</Text>
+          <Text style={styles.gridValue}>{questionSoundEnabled ? 'On' : 'Off'}</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.gridItem, vibrationMode && styles.gridItemActive]}
+          onPress={async () => {
+            await Haptics.selectionAsync();
+            setVibrationMode(!vibrationMode);
+          }}
+        >
+          <Text style={styles.gridLabel}>Vibration</Text>
+          <Text style={styles.gridValue}>{vibrationMode ? 'On' : 'Off'}</Text>
         </TouchableOpacity>
       </View>
+
+      <View style={styles.gridInfo}>
+        <Text style={styles.gridInfoText}>
+          Frequency sets how often to hear direction beeps. Learning plays a short cue one second before each direction beep.
+        </Text>
+      </View>
+      <TouchableOpacity style={styles.advancedToggle} onPress={scrollToAdvanced}>
+        <Text style={styles.advancedToggleText}>Advanced ↓</Text>
+      </TouchableOpacity>
 
       {/* Status */}
       <Text style={styles.status}>{status}</Text>
@@ -774,110 +809,68 @@ export default function App() {
           </View>
         </TouchableOpacity>
       </Modal>
-      <Modal
-        visible={showAdvanced}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowAdvanced(false)}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowAdvanced(false)}
-        >
-          
+      </View>
 
-          {/* Vibration Mode Toggle */}
-          <View style={styles.modalContent}>
-            <View style={styles.settingBox}>
-              <View style={styles.switchRow}>
-                <View>
-                  <Text style={styles.settingLabel}>Vibration Mode</Text>
-                  <Text style={styles.settingDescription}>
-                    Vibrate on North.
-                  </Text>
-                </View>
-                <Switch
-                  value={vibrationMode}
-                  onValueChange={setVibrationMode}
-                  trackColor={{ false: '#475569', true: '#3B82F6' }}
-                  thumbColor={vibrationMode ? '#fff' : '#f4f4f4'}
-                />
-              </View>
-            </View>
-          </View>
+      <View style={styles.page}>
+        {/* Advanced Settings */}
+        <View style={styles.advancedContainer}>
+          <Text style={styles.advancedTitle}>Advanced</Text>
 
-          
-
-          <View style={styles.modalContent}>
-            <View style={styles.settingBox}>
-              <Text style={styles.settingLabel}>Calibrate Compass</Text>
-              <View style={styles.switchRow}>
-                <View>
-                  <Text style={styles.settingDescription}>
-                    To improve the calibration of the compass, slowly rotate your phone along all three axis multiple times. 
-                  </Text>
-                </View>
-              </View>
-            </View>
-          </View>
-
-          
-          {/* Offset Calibration */}
-          <View style={styles.modalContent}>
-            <View style={styles.settingBox}>
-              <Text style={styles.settingLabel}>Add Offset</Text>
-              <View style={styles.switchRow}>
-                <View>
-                    <Text style={styles.settingDescription}>
-                      If you want to keep the phone in a pocket. Hold the phone in front of you, facing exactly forward; press Add Offset; then you'll have 5s to put the phone in a pocket.
-                    </Text>
-                  {calibrationOffset > 0 && !calibrating && (
-                    <Text style={styles.settingDescriptionBold}>
-                      Offset: {calibrationOffset.toFixed(1)}°
-                    </Text>
-                  )}
-                  {(calibrating) && (
-                    <Text style={styles.settingDescriptionBold}>
-                      Place the phone where you'll keep it, then don't move for 5s.
-                    </Text>
-                  )}
-                </View>
-              </View>
-              <TouchableOpacity
-                style={[
-                  styles.calibrateButton,
-                  calibrating && styles.calibrateButtonDisabled,
-                ]}
-                onPress={startCalibration}
-                disabled={calibrating}
-              >
-                <Text style={styles.calibrateButtonText}>
-                  {calibrating ? 'Put the phone in a pocket...' : 'Add Offset'}
+          <View style={styles.settingBox}>
+            <Text style={styles.settingLabel}>Calibrate Compass</Text>
+            <View style={styles.switchRow}>
+              <View>
+                <Text style={styles.settingDescription}>
+                  To improve the calibration of the compass, slowly rotate your phone along all three axis multiple times.
                 </Text>
-              </TouchableOpacity>
-              {!calibrating && calibrationOffset !== 0 && <TouchableOpacity
-                style={[
-                  styles.calibrateButton,
-                  styles.closeButton,
-                ]}
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.settingBox}>
+            <Text style={styles.settingLabel}>Add Offset</Text>
+            <View style={styles.switchRow}>
+              <View>
+                <Text style={styles.settingDescription}>
+                  If you want to keep the phone in a pocket. Hold the phone in front of you, facing exactly forward; press Add Offset; then you'll have 5s to put the phone in a pocket.
+                </Text>
+                {calibrationOffset > 0 && !calibrating && (
+                  <Text style={styles.settingDescriptionBold}>
+                    Offset: {calibrationOffset.toFixed(1)}°
+                  </Text>
+                )}
+                {calibrating && (
+                  <Text style={styles.settingDescriptionBold}>
+                    Place the phone where you'll keep it, then don't move for 5s.
+                  </Text>
+                )}
+              </View>
+            </View>
+            <TouchableOpacity
+              style={[styles.calibrateButton, calibrating && styles.calibrateButtonDisabled]}
+              onPress={startCalibration}
+              disabled={calibrating}
+            >
+              <Text style={styles.calibrateButtonText}>
+                {calibrating ? 'Put the phone in a pocket...' : 'Add Offset'}
+              </Text>
+            </TouchableOpacity>
+            {!calibrating && calibrationOffset !== 0 && (
+              <TouchableOpacity
+                style={[styles.calibrateButton, styles.resetButton]}
                 onPress={resetCalibration}
                 disabled={calibrationOffset === 0}
               >
-                <Text style={styles.calibrateButtonText}>
-                  Reset Offset
-                </Text>
-              </TouchableOpacity> }
-            </View>
-            <TouchableOpacity
-              style={styles.closeButton}
-              onPress={() => setShowAdvanced(false)}
-            >
-              <Text style={styles.closeButtonText}>Close</Text>
-            </TouchableOpacity>
+                <Text style={styles.calibrateButtonText}>Reset Offset</Text>
+              </TouchableOpacity>
+            )}
           </View>
+        </View>
+        <TouchableOpacity style={styles.advancedToggle} onPress={scrollToMain}>
+          <Text style={styles.advancedToggleText}>↑ Back</Text>
         </TouchableOpacity>
-      </Modal>
+      </View>
+      </ScrollView>
     </LinearGradient>
   );
 }
@@ -937,10 +930,6 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.8)',
     marginTop: 8,
   },
-  settingsContainer: {
-    width: '90%',
-    gap: 12,
-  },
   settingBox: {
     width: '100%',
     padding: 15,
@@ -969,6 +958,78 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginTop: 2,
     fontWeight: 'bold',
+  },
+  pagedContent: {
+    alignItems: 'center',
+  },
+  page: {
+    width: '100%',
+    height: screenHeight,
+    alignItems: 'center',
+  },
+  gridContainer: {
+    width: '90%',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginTop: 10,
+  },
+  gridItem: {
+    width: '32%',
+    marginBottom: 10,
+    paddingVertical: 12,
+    backgroundColor: 'rgba(30,45,70,0.5)',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.3)',
+    alignItems: 'center',
+  },
+  gridItemActive: {
+    borderColor: '#22c55e',
+  },
+  gridItemDisabled: {
+    opacity: 0.5,
+  },
+  gridLabel: {
+    color: '#fff',
+    fontSize: 14,
+  },
+  gridValue: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  advancedContainer: {
+    width: '90%',
+    gap: 12,
+    marginTop: 20,
+  },
+  advancedTitle: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 6,
+  },
+  resetButton: {
+    backgroundColor: '#475569',
+    marginTop: 6,
+  },
+  gridInfo: {
+    width: '90%',
+    marginTop: 4,
+  },
+  gridInfoText: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 12,
+    textAlign: 'center',
+  },
+  advancedToggle: {
+    marginTop: 10,
+  },
+  advancedToggleText: {
+    color: '#3B82F6',
+    fontSize: 16,
   },
   dropdownButton: {
     backgroundColor: 'rgba(248,250,252,0.1)',
@@ -1062,31 +1123,5 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: 'rgba(255,255,255,0.7)',
     fontSize: 14,
-  },
-  advancedButton: {
-    backgroundColor: '#64748B',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    marginTop: 10,
-    alignItems: 'center',
-  },
-  advancedButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  closeButton: {
-    backgroundColor: '#475569',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    marginTop: 16,
-    alignItems: 'center',
-  },
-  closeButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
   },
 });
