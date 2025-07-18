@@ -36,21 +36,54 @@ const QUESTION_SOUND_DELAY = 1000; // 1 second before directional sound
 ////////////////////////////////////////////////////////////////////////////////
 // 2. AUDIO HELPERS /////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
-const sineBuffer = (freq, durSec, panValue = 0) => {
-  const frames = durSec * SAMPLE_RATE;
-  const buf = new Float32Array(frames * 2); // Stereo
-  
+// Generate a stereo buffer for a tone coming from an azimuth angle in degrees.
+// 0° is directly in front, 90° right, 180° back, 270° left.
+// Includes interaural time delay, mild level panning with crossfeed and a
+// simple frequency dependent front/back attenuation for a smoother experience.
+const directionalBuffer = (freq, durSec, angleDeg = 0) => {
+  const frames = Math.floor(durSec * SAMPLE_RATE);
+  const base = new Float32Array(frames);
+  const buf = new Float32Array(frames * 2);
+
+  const rad = (angleDeg * Math.PI) / 180;
+  const pan = Math.sin(rad); // left/right component
+  const fb = Math.cos(rad);  // front/back component
+
+  // Equal-power panning, but reduce ILD and add small crossfeed
+  const lGain = Math.cos((pan + 1) * Math.PI / 4);
+  const rGain = Math.sin((pan + 1) * Math.PI / 4);
+  const CROSS = 0.2; // 0 = none, 1 = full opposite ear
+
+  // Angle based front/back attenuation
+  const fbMix = (fb + 1) / 2; // 0 back -> 1 front
+  const fbGain = 0.4 + 0.6 * fbMix; // 0.4 back, 1 front
+
+  // Interaural time difference - max around 0.6ms
+  const ITD_MAX = 0.0006;
+  const itd = ITD_MAX * Math.sin(rad);
+  const delayLFrames = Math.round(Math.max(itd, 0) * SAMPLE_RATE);
+  const delayRFrames = Math.round(Math.max(-itd, 0) * SAMPLE_RATE);
+
+  // Precompute base tone with gentle fade and optional low-pass when behind
+  let prev = 0;
   for (let i = 0; i < frames; i++) {
     const t = i / SAMPLE_RATE;
-    const fade = Math.min(1, t / 0.02, (durSec - t) / 0.02); // 20ms fade
-    const sample = fade * Math.sin(2 * Math.PI * freq * t) * 0.3; // Lower volume
-    
-    // Apply stereo panning
-    const leftGain = Math.cos((panValue + 1) * Math.PI / 4);
-    const rightGain = Math.sin((panValue + 1) * Math.PI / 4);
-    
-    buf[i * 2] = sample * leftGain;     // Left channel
-    buf[i * 2 + 1] = sample * rightGain; // Right channel
+    const fade = Math.min(1, t / 0.04, (durSec - t) / 0.04); // 40ms fade
+    let sample = Math.sin(2 * Math.PI * freq * t);
+    if (fb < 0) sample = 0.5 * sample + 0.5 * prev; // crude low-pass from back
+    prev = sample;
+    base[i] = sample * 0.3 * fbGain * fade;
+  }
+
+  for (let i = 0; i < frames; i++) {
+    const idxL = i - delayLFrames;
+    const idxR = i - delayRFrames;
+    const leftSample = idxL >= 0 ? base[idxL] : 0;
+    const rightSample = idxR >= 0 ? base[idxR] : 0;
+    const l = leftSample * lGain;
+    const r = rightSample * rGain;
+    buf[i * 2] = l + r * CROSS;
+    buf[i * 2 + 1] = r + l * CROSS;
   }
   return buf;
 };
@@ -160,36 +193,32 @@ export default function App() {
       });
 
       // Create north sound (celebratory tone)
-      const northURI = await writeWav('north.wav', sineBuffer(880, 0.3));
+      const northURI = await writeWav('north.wav', directionalBuffer(880, 0.3, 0));
       northSound.current = (await Audio.Sound.createAsync(
         { uri: northURI }, 
         { shouldPlay: false, volume: 0.8 }
       )).sound;
 
       // Create question sound (neutral tone, centered)
-      const questionURI = await writeWav('question.wav', sineBuffer(660, 0.2, 0));
+      const questionURI = await writeWav('question.wav', directionalBuffer(660, 0.2, 0));
       questionSound.current = (await Audio.Sound.createAsync(
         { uri: questionURI }, 
         { shouldPlay: false, volume: 0.5 }
       )).sound;
 
-      // Create directional sounds with MANY pan values for extremely precise directionality
-      const panValues = [];
-      for (let i = 0; i <= 120; i++) {
-        panValues.push(-1.0 + (i * (2 / 120)));
-      }
-      
-      for (let i = 0; i < panValues.length; i++) {
-        const panValue = panValues[i];
-        const dirURI = await writeWav(`dir_${i}.wav`, sineBuffer(440, 0.25, panValue));
-        dirSounds.current[i] = (await Audio.Sound.createAsync(
-          { uri: dirURI }, 
-          { shouldPlay: false, volume: 0.5 }
-        )).sound;
+      // Create directional sounds for all 360 degrees
+      for (let angle = 0; angle < 360; angle++) {
+        const dirURI = await writeWav(`dir_${angle}.wav`, directionalBuffer(440, 0.25, angle));
+        dirSounds.current[angle] = (
+          await Audio.Sound.createAsync(
+            { uri: dirURI },
+            { shouldPlay: false, volume: 0.5 }
+          )
+        ).sound;
       }
 
       // Create silent sound for background activity
-      const silentURI = await writeWav('silent.wav', sineBuffer(0, 0.1));
+      const silentURI = await writeWav('silent.wav', directionalBuffer(0, 0.1, 0));
       dirSounds.current.silent = (await Audio.Sound.createAsync(
         { uri: silentURI }, 
         { shouldPlay: false, volume: 0.01, isLooping: true }
@@ -231,15 +260,11 @@ export default function App() {
 
   const playDir = async () => {
     try {
-      // Get current heading at time of playing directional sound
+      // Compute azimuth angle of north relative to current heading
       const hdg = currentHeading.current;
-      const panValue = Math.sin(hdg * Math.PI / 180);
-      const correctedPan = -panValue;
-      
-      // Map pan value (-1 to 1) to sound index (0 to 120) for 121 different positions
-      const index = Math.round((correctedPan + 1) * 60);
-      const soundIndex = Math.max(0, Math.min(120, index));
-      
+      const angle = ((360 - hdg) % 360);
+      const soundIndex = Math.round(angle) % 360; // Use pre-generated sound for this azimuth
+
       const sound = dirSounds.current[soundIndex];
       if (sound) {
         const status = await sound.getStatusAsync();
