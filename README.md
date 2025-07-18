@@ -6,8 +6,10 @@ A React Native Expo app that provides compass functionality with background audi
 
 - Real-time compass with smooth rotation
 - Audio notifications when facing north
+- Optional vibration feedback when facing north
 - Directional audio cues with configurable frequency
 - Background audio playback (works when app is backgrounded)
+- Vibration continues while backgrounded thanks to silent audio
 - Optional offset calibration for using the phone at an angle (including in a pocket)
 - No location tracking required
 - Accessibility-friendly design
@@ -108,3 +110,4 @@ eas submit --platform ios
 - Audio will mix with other apps (doesn't interrupt music/calls)
 - No location permissions required
 - Complies with App Store guidelines for background audio
+- Vibration uses React Native's API because expo-haptics only works after touch

@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet, View, Text, TouchableOpacity,
-  Alert, AppState, Dimensions, ScrollView, Switch, Modal
+  Alert, AppState, Dimensions, ScrollView, Switch, Modal,
+  Vibration
 } from 'react-native';
 import { Audio, InterruptionModeIOS, InterruptionModeAndroid } from 'expo-av';
 import CompassHeading from 'react-native-compass-heading';
@@ -102,6 +103,7 @@ export default function App() {
   const [calibrationOffset, setCalibrationOffset] = useState(0);
   const [calibrating, setCalibrating] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [vibrateOnNorth, setVibrateOnNorth] = useState(false);
 
   // ----- REFS ----------------------------------------------------------------
   const rotRef = useRef(0);
@@ -185,12 +187,17 @@ export default function App() {
           northSoundPlaying.current = false;
         }, 300);
         await northSound.current?.replayAsync();
-        
+
       }
     } catch (error) {
       console.error('North sound error:', error);
       northSoundPlaying.current = false;
     }
+  };
+
+  const vibrateNorth = () => {
+    // Pleasant double pulse
+    Vibration.vibrate([0, 100, 50, 100]);
   };
 
   const playQuestionSound = async () => {
@@ -331,17 +338,20 @@ export default function App() {
       if (pulseRef.current) {
         pulseRef.current.setNativeProps({ style: { opacity: 0.4 } });
       }
-      stopSilentSound();
-      playNorth();
+      if (vibrateOnNorth) {
+        startSilentSound();
+        vibrateNorth();
+      } else {
+        stopSilentSound();
+        playNorth();
+      }
     } else if (!northNow && north) {
       setNorth(false);
       if (pulseRef.current) {
         pulseRef.current.setNativeProps({ style: { opacity: 0 } });
       }
       
-      //if (freq > 0) {
-        startSilentSound();
-      //}
+      startSilentSound();
     }
 
     //if (freq === 0) {
@@ -648,6 +658,24 @@ export default function App() {
             <Text style={styles.dropdownButtonText}>{freqTxt()}</Text>
             <Text style={styles.dropdownArrow}>{showDropdown ? '▲' : '▼'}</Text>
           </TouchableOpacity>
+        </View>
+
+        {/* Vibration on North Toggle */}
+        <View style={styles.settingBox}>
+          <View style={styles.switchRow}>
+            <View>
+              <Text style={styles.settingLabel}>Vibrate on North</Text>
+              <Text style={styles.settingDescription}>
+                Uses a short pulse instead of a sound
+              </Text>
+            </View>
+            <Switch
+              value={vibrateOnNorth}
+              onValueChange={setVibrateOnNorth}
+              trackColor={{ false: '#475569', true: '#3B82F6' }}
+              thumbColor={vibrateOnNorth ? '#fff' : '#f4f4f4'}
+            />
+          </View>
         </View>
 
         {/* Learning Mode Toggle */}
