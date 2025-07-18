@@ -149,8 +149,8 @@ export default function App() {
 
       // Create directional sounds with MANY pan values for extremely precise directionality
       const panValues = [];
-      for (let i = 0; i <= 40; i++) {
-        panValues.push(-1.0 + (i * 0.05));
+      for (let i = 0; i <= 120; i++) {
+        panValues.push(-1.0 + (i * (2 / 120)));
       }
       
       for (let i = 0; i < panValues.length; i++) {
@@ -208,9 +208,9 @@ export default function App() {
       const panValue = Math.sin(hdg * Math.PI / 180);
       const correctedPan = -panValue;
       
-      // Map pan value (-1 to 1) to sound index (0 to 40) for 41 different positions
-      const index = Math.round((correctedPan + 1) * 20);
-      const soundIndex = Math.max(0, Math.min(40, index));
+      // Map pan value (-1 to 1) to sound index (0 to 120) for 121 different positions
+      const index = Math.round((correctedPan + 1) * 60);
+      const soundIndex = Math.max(0, Math.min(120, index));
       
       const sound = dirSounds.current[soundIndex];
       if (sound) {
