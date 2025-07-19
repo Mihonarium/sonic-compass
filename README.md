@@ -13,6 +13,26 @@ A React Native Expo app that provides compass functionality with background audi
 - Accessibility-friendly design
 - Optional vibration mode when facing north
 
+## ToDo
+
+(uhm feel free to fork the repo and ask claude/codex/gemini to do these things and open PRs?)
+
+- [x] Offsets for where's forward
+- [x] Vibration mode
+- [ ] Spatial audio for supporting headphones?
+- [ ] Presets:
+  - Start preset(s): sound every second?
+  - Train: sound every 2 seconds with cues -> sound every 10 seconds with cues -> every 60 seconds with cues
+  - Stealth sense: vibration only, no sounds
+- [ ] Step-by-step instructions for offsets
+- [ ] Onboarding
+- [ ] Compass UI (a pointer at the top of the screen? nicer needle?)
+- [ ] Add a setting for true north
+- [ ] Better directional sound: ask LLMs about all the wonderful ways directional sound can be made more realistic!
+- [ ] Better sounds: chimes? bells? drums? there are all sorts of sounds potentially more pleasant than what the app uses
+- [ ] Nicer vibration when the app is on the background: it should be possible in principle, I have no idea how to do that
+- [ ] Apple Watch version
+
 ## Setup Instructions
 
 ### Prerequisites
