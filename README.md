@@ -1,12 +1,26 @@
-# Develop an Effortless Sense of Direction
+# Acquire a New Sense: The Direction of North.
 
-Your brain will learn to anticipate the direction of North, building an intuitive sense of North.
+Sonic Compass is a tool for perceptual learning. It uses spatial audio and predictive feedback to help you build an intuitive, persistent sense of direction that works even when the app is off.
 
-Test the preview of the app:
+You'll continuously be able to feel that North is *right there*.
+
+Test preview of the app:
 
 [<img width="220" height="75" alt="image" src="https://github.com/user-attachments/assets/e1a7b56e-e7be-4bee-9bf5-7af56c1e7770" />](https://testflight.apple.com/join/sUKCjAyP)
 
+## How It Works: A Feedback Loop for Your Brain
 
+**1. The Cue (A Question)**
+
+A neutral, centered sound plays, prompting your brain with a subconscious question: "Where is North?"
+
+**2. The Prediction**
+
+In the brief moment after the cue, your brain makes an automatic prediction: you start to expect where the next sound will be.
+
+**3. The Feedback (The Answer)**
+
+One second later, a sound plays from the actual direction of North, providing immediate feedback and building the feeling that North is right there.
 
 ## Features
 
