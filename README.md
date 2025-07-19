@@ -58,12 +58,12 @@ Test the preview of the app:
 
 ```bash
 # Preview build (for testing)
-# Ask o3 to help you figure out how to get all the signed things and/or follow Expo instructions
+# Ask o3 to help you figure out how to get all the signed things and/or follow Expo instructions.
+# This command will show a QR code. Scan it with your phone. (The QR code is also available in Builds on Expo.)
 eas build --platform ios --profile development
 
-# Scan the QR code generated as a result of the above with your phone (you can also get it from Builds on Expo), and run the below.
+# Run this and scan the QR code. You can now test the app!
 npx expo start --tunnel
-# Scan the QR code generated now. You can now test the app!
 
 # Production build (for App Store)
 eas build --platform ios --profile production
