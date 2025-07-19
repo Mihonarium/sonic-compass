@@ -1,6 +1,12 @@
-# Background Sonic Compass iOS App
+# Develop an Effortless Sense of Direction
 
-A React Native Expo app that provides compass functionality with background audio capabilities for iOS.
+Your brain will learn to anticipate the direction of North, building an intuitive sense of North.
+
+Test the preview of the app:
+
+[<img width="220" height="75" alt="image" src="https://github.com/user-attachments/assets/e1a7b56e-e7be-4bee-9bf5-7af56c1e7770" />](https://testflight.apple.com/join/sUKCjAyP)
+
+
 
 ## Features
 
@@ -71,17 +77,11 @@ Create simple placeholder images or use the Expo defaults:
 4. Configure project: `eas build:configure`
 5. Update `app.json` with your bundle identifier
 
-### 3. GitHub Actions Setup
-
-1. Go to your GitHub repository settings
-2. Add repository secret: `EXPO_TOKEN` (from expo.dev profile)
-3. Push code to trigger build
-
-### 4. Build Commands
+### 3. Build Commands
 
 ```bash
 # Preview build (for testing)
-eas build --platform ios --profile preview
+eas build --platform ios --profile development
 
 # Production build (for App Store)
 eas build --platform ios --profile production
@@ -90,17 +90,9 @@ eas build --platform ios --profile production
 eas submit --platform ios
 ```
 
-### 5. Testing
+### 4. Testing
 
 - Use TestFlight for beta testing
-- Install on device via Expo Go for development
-
-## Key iOS Background Features
-
-- **Audio Session**: Configured for background playback
-- **Background Modes**: Audio background mode enabled
-- **Sensor Access**: Magnetometer works in background with active audio session
-- **No Location**: Uses device sensors only, no GPS required
 
 ## File Structure
 
@@ -117,15 +109,15 @@ eas submit --platform ios
 
 ## Usage
 
-1. Open app and toggle the switch to start compass
-2. Point device north to hear notification sound
-3. Configure direction sound frequency in settings
-4. App continues to work when backgrounded or when other apps are open
+1. Open app
+2. Point device north to hear a sound
+3. Configure the directional sounds frequency
+4. Turn on the Learning mode
+5. App continues to work when backgrounded or when other apps are open
 
 ## Notes
 
 - Requires iOS device with magnetometer
-- Works best when device is held flat
 - Audio will mix with other apps (doesn't interrupt music/calls)
 - No location permissions required
 - Complies with App Store guidelines for background audio
