@@ -44,32 +44,9 @@ Test the preview of the app:
 ### Prerequisites
 
 - Apple Developer Account
-- GitHub account
 - Expo account (free at expo.dev)
 
-### 1. Required Assets (Only Images Now)
-
-You only need these image files in `/assets/` folder:
-- `icon.png` (1024x1024) - App icon
-- `splash.png` - Splash screen 
-- `adaptive-icon.png` - Android icon
-- `favicon.png` - Web favicon
-
-**No audio files needed!** The app generates all sounds programmatically.
-
-### 2. Quick Start with Placeholder Images
-
-Create simple placeholder images or use the Expo defaults:
-
-```bash
-# Create basic assets (or use any square images)
-# icon.png - 1024x1024 square image
-# splash.png - any size, will be resized
-# adaptive-icon.png - 1024x1024 square
-# favicon.png - 32x32 or larger square
-```
-
-### 2. Configure Expo/EAS Build
+### 1. Configure Expo/EAS Build
 
 1. Sign up at [expo.dev](https://expo.dev)
 2. Install EAS CLI: `npm install -g eas-cli`
@@ -77,11 +54,16 @@ Create simple placeholder images or use the Expo defaults:
 4. Configure project: `eas build:configure`
 5. Update `app.json` with your bundle identifier
 
-### 3. Build Commands
+### 2. Build Commands
 
 ```bash
 # Preview build (for testing)
+# Ask o3 to help you figure out how to get all the signed things and/or follow Expo instructions
 eas build --platform ios --profile development
+
+# Scan the QR code generated as a result of the above with your phone (you can also get it from Builds on Expo), and run the below.
+npx expo start --tunnel
+# Scan the QR code generated now. You can now test the app!
 
 # Production build (for App Store)
 eas build --platform ios --profile production
@@ -90,28 +72,23 @@ eas build --platform ios --profile production
 eas submit --platform ios
 ```
 
-### 4. Testing
-
-- Use TestFlight for beta testing
-
 ## File Structure
 
 ```
 /
-├── App.js              # Main application component
-├── package.json        # Dependencies and scripts
+├── App.js             # Main application component
+├── package.json       # Dependencies and scripts
 ├── app.json           # Expo configuration
 ├── eas.json           # EAS Build configuration
-├── .github/workflows/build.yml  # GitHub Actions
-├── assets/            # Audio files and images
+├── assets/            # Images & audio files
 └── README.md          # This file
 ```
 
 ## Usage
 
-1. Open app
-2. Point device north to hear a sound
-3. Configure the directional sounds frequency
+1. Open the app
+2. Point the device north to hear a sound
+3. Configure the directional sound frequency
 4. Turn on the Learning mode
 5. App continues to work when backgrounded or when other apps are open
 
