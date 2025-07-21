@@ -582,6 +582,7 @@ export default function App() {
 
   return (
     <LinearGradient colors={['#0f1a2b', '#253b56']} style={styles.container}>
+      <View style={styles.contentWrapper}> 
       <ScrollView
         ref={scrollRef}
         pagingEnabled
@@ -887,6 +888,7 @@ export default function App() {
         </TouchableOpacity>
       </Modal>
       </ScrollView>
+      </View>
     </LinearGradient>
   );
 }
@@ -899,6 +901,11 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     paddingHorizontal: 20,
+  },
+  contentWrapper: {
+    flex: 1,
+    width: '100%',
+    maxWidth: 600,
   },
   header: {
     width: '100%',
