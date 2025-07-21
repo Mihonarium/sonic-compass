@@ -17,6 +17,22 @@ import { Buffer } from 'buffer';
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 ////////////////////////////////////////////////////////////////////////////////
+// 0. ADAPTIVE UI SCALING UTILITIES ///////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+
+// Design reference screen dimensions (iPhone 13 Pro Max)
+const DESIGN_WIDTH = 428;
+const DESIGN_HEIGHT = 926;
+
+// Scaling functions
+const scale = (size) => (screenWidth / DESIGN_WIDTH) * size;
+const verticalScale = (size) => (screenHeight / DESIGN_HEIGHT) * size;
+const fontScale = (size, factor = 0.5) => size + (scale(size) - size) * factor;
+
+// Small screen detection for adaptive UI changes
+const IS_SMALL_SCREEN = screenHeight < 750;
+
+////////////////////////////////////////////////////////////////////////////////
 // 1. STATIC CONFIGURATION //////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 const FREQ_OPTS = [
@@ -577,12 +593,45 @@ export default function App() {
   }, [vibrationMode]);
 
   // ----- RENDER --------------------------------------------------------------
-  const compassSize = Math.min(screenWidth * 0.8, 300);
+  const advancedButtonText = IS_SMALL_SCREEN ? 'More ▼' : 'Advanced ▼';
+  const advancedTitleText = IS_SMALL_SCREEN ? 'More' : 'Advanced';
+  
+  // --- HYBRID SIZING LOGIC ---
+  let compassSize;
+
+  // 1. Define the ideal compass size for large screens.
+  const idealCompassSize = Math.min(screenWidth * 0.9, 300);
+
+  // 2. Calculate the total height required by all non-compass elements.
+  const pageVerticalPadding = verticalScale(20) * 2;
+  const headerHeight = styles.header.marginTop + styles.header.marginBottom + styles.header.minHeight;
+  const readoutHeight = styles.readout.marginVertical * 2 + fontScale(48) + fontScale(24) + styles.dir.marginTop;
+  const gridContainerHeight = styles.gridContainer.marginTop + styles.gridItem.marginBottom + (styles.gridItem.paddingVertical * 2) + fontScale(14) + fontScale(16) + styles.gridValue.marginTop;
+  const gridInfoHeight = !IS_SMALL_SCREEN ? (styles.gridInfo.marginTop + (fontScale(12) * 1.4 * 7)) : 0;
+  const advancedToggleHeight = styles.advancedToggle.marginTop + (styles.advancedToggle.paddingVertical * 2) + fontScale(16);
+  const footerSpacerHeight = styles.footerSpacer.height;
+  const compassMargin = styles.compassWrap.marginVertical * 2;
+
+  const nonCompassSpace = pageVerticalPadding + headerHeight + readoutHeight + gridContainerHeight + gridInfoHeight + advancedToggleHeight + footerSpacerHeight + compassMargin + 0.6;
+  
+  // 3. Check if the ideal layout would overflow the screen.
+  const requiredTotalHeight = nonCompassSpace + idealCompassSize;
+
+  if (requiredTotalHeight > screenHeight) {
+    // Fallback for small screens: calculate a size that fits.
+    const availableHeight = screenHeight - nonCompassSpace;
+    compassSize = Math.max(220, Math.min(availableHeight, screenWidth * 0.9));
+  } else {
+    // Default for large screens: use the ideal size.
+    compassSize = idealCompassSize;
+  }
+  // --- END OF SIZING LOGIC ---
+
   const radius = compassSize / 2;
+  const cscale = (val) => val * (compassSize / 300); // Scale SVG elements relative to max size
 
   return (
     <LinearGradient colors={['#0f1a2b', '#253b56']} style={styles.container}>
-      <View style={styles.contentWrapper}> 
       <ScrollView
         ref={scrollRef}
         pagingEnabled
@@ -591,7 +640,7 @@ export default function App() {
         <View style={[styles.page, { height: screenHeight }]}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Sonic Compass</Text>
+        {!IS_SMALL_SCREEN && <Text style={styles.title}>Sonic Compass</Text>}
       </View>
 
       {/* Compass */}
@@ -599,9 +648,9 @@ export default function App() {
         <View 
           ref={pulseRef}
           style={[styles.pulse, { 
-            width: compassSize + 20, 
-            height: compassSize + 20,
-            borderRadius: (compassSize + 20) / 2,
+            width: compassSize + scale(20), 
+            height: compassSize + scale(20),
+            borderRadius: (compassSize + scale(20)) / 2,
             opacity: 0
           }]} 
         />
@@ -623,19 +672,19 @@ export default function App() {
             <Circle 
               cx={radius} 
               cy={radius} 
-              r={radius - 5} 
+              r={radius - cscale(5)} 
               fill="url(#compassGrad)" 
               stroke="rgba(59, 130, 246, 0.3)" 
-              strokeWidth="1.5" 
+              strokeWidth={cscale(1.5)} 
             />
             
             <Circle 
               cx={radius} 
               cy={radius} 
-              r={radius - 25} 
+              r={radius - cscale(25)} 
               fill="url(#innerGrad)" 
               stroke="rgba(148, 163, 184, 0.2)" 
-              strokeWidth="1" 
+              strokeWidth={cscale(1)} 
             />
 
             {Array.from({ length: 72 }, (_, i) => {
@@ -644,11 +693,11 @@ export default function App() {
               const isMinor = angle % 30 === 0;
               const isSmall = angle % 10 === 0;
               
-              const length = isMajor ? 20 : isMinor ? 15 : isSmall ? 10 : 6;
-              const width = isMajor ? 3 : isMinor ? 2 : 1;
+              const length = isMajor ? cscale(20) : isMinor ? cscale(15) : isSmall ? cscale(10) : cscale(6);
+              const width = isMajor ? cscale(3) : isMinor ? cscale(2) : 1;
               const opacity = isMajor ? 1 : isMinor ? 0.8 : isSmall ? 0.6 : 0.4;
               
-              const outerRadius = radius - 15;
+              const outerRadius = radius - cscale(15);
               const innerRadius = outerRadius - length;
               const angleRad = (angle - 90) * Math.PI / 180;
               
@@ -668,23 +717,23 @@ export default function App() {
               );
             })}
 
-            <SvgText x={compassSize - 55} y={radius + 7} textAnchor="middle" fill="#fff" fontSize="18">E</SvgText>
-            <SvgText x={radius} y={compassSize - 40} textAnchor="middle" fill="#fff" fontSize="18">S</SvgText>
-            <SvgText x={55} y={radius + 7} textAnchor="middle" fill="#fff" fontSize="18">W</SvgText>
+            <SvgText x={compassSize - cscale(55)} y={radius + cscale(7)} textAnchor="middle" fill="#fff" fontSize={cscale(18)}>E</SvgText>
+            <SvgText x={radius} y={compassSize - cscale(40)} textAnchor="middle" fill="#fff" fontSize={cscale(18)}>S</SvgText>
+            <SvgText x={cscale(55)} y={radius + cscale(7)} textAnchor="middle" fill="#fff" fontSize={cscale(18)}>W</SvgText>
           </G>
 
           <G opacity="0.6">
             <Polygon
-              points={`${radius},${25} ${radius-6},${42} ${radius+6},${42}`}
+              points={`${radius},${cscale(25)} ${radius-cscale(6)},${cscale(42)} ${radius+cscale(6)},${cscale(42)}`}
               fill="#9CA3AF"
               stroke="#6B7280"
               strokeWidth="0.5"
             />
             <Line 
-              x1={radius} y1={42} 
-              x2={radius} y2={compassSize - 65} 
+              x1={radius} y1={cscale(42)} 
+              x2={radius} y2={compassSize - cscale(65)} 
               stroke="#9CA3AF" 
-              strokeWidth="2.5" 
+              strokeWidth={cscale(2.5)} 
               strokeLinecap="round"
               opacity="0.8"
             />
@@ -692,31 +741,31 @@ export default function App() {
 
           <G transform={`rotate(${rotRef.current} ${radius} ${radius})`}>
             <Polygon
-              points={`${radius},${25} ${radius-8},${45} ${radius+8},${45}`}
+              points={`${radius},${cscale(25)} ${radius-cscale(8)},${cscale(45)} ${radius+cscale(8)},${cscale(45)}`}
               fill="#EF4444"
               stroke="#DC2626"
               strokeWidth="1"
             />
             <Line 
-              x1={radius} y1={45} 
-              x2={radius} y2={radius + 35} 
+              x1={radius} y1={cscale(45)} 
+              x2={radius} y2={radius + cscale(35)} 
               stroke="#EF4444" 
-              strokeWidth="3.5" 
+              strokeWidth={cscale(3.5)}
               strokeLinecap="round" 
             />
             <Polygon
-              points={`${radius},${25} ${radius-8},${45} ${radius+8},${45}`}
+              points={`${radius},${cscale(25)} ${radius-cscale(8)},${cscale(45)} ${radius+cscale(8)},${cscale(45)}`}
               fill="#FCA5A5"
               opacity="0.3"
             />
             
-            <SvgText x={radius} y={70} textAnchor="middle" fill="#000" fontSize="20" fontWeight="bold" stroke="#000" strokeWidth="3">N</SvgText>
-            <SvgText x={radius} y={70} textAnchor="middle" fill="#EF4444" fontSize="20" fontWeight="bold">N</SvgText>
+            <SvgText x={radius} y={cscale(70)} textAnchor="middle" fill="#000" fontSize={cscale(20)} fontWeight="bold" stroke="#000" strokeWidth={cscale(3)}>N</SvgText>
+            <SvgText x={radius} y={cscale(70)} textAnchor="middle" fill="#EF4444" fontSize={cscale(20)} fontWeight="bold">N</SvgText>
           </G>
 
-          <Circle cx={radius} cy={radius} r="12" fill="#F8FAFC" stroke="#334155" strokeWidth="1.5" />
-          <Circle cx={radius} cy={radius} r="6" fill="#64748B" />
-          <Circle cx={radius} cy={radius} r="3" fill="#F1F5F9" opacity="0.8" />
+          <Circle cx={radius} cy={radius} r={cscale(12)} fill="#F8FAFC" stroke="#334155" strokeWidth={cscale(1.5)} />
+          <Circle cx={radius} cy={radius} r={cscale(6)} fill="#64748B" />
+          <Circle cx={radius} cy={radius} r={cscale(3)} fill="#F1F5F9" opacity="0.8" />
         </Svg>
       </View>
 
@@ -762,20 +811,25 @@ export default function App() {
           <Text style={styles.gridValue}>{vibrationMode ? 'On' : 'Off'}</Text>
         </TouchableOpacity>
       </View>
-
-      <View style={styles.gridInfo}>
-        <Text style={styles.gridInfoText}>Set the <Text style={styles.gridInfoTitle}>Frequency</Text> of directional North sounds.</Text>
-        <Text style={styles.gridInfoText}>Start small. Requires 🎧.</Text>
-        <Text style={styles.gridInfoText}></Text>
-        <Text style={styles.gridInfoText}>The <Text style={styles.gridInfoTitle}>Learning</Text> mode plays a cue 1s before every North sound.</Text>
-        <Text style={styles.gridInfoText}>When you hear it, quickly guess where's North.</Text>
-        <Text style={styles.gridInfoText}></Text>
-        <Text style={styles.gridInfoText}>Replace sounds with <Text style={styles.gridInfoTitle}>Vibration</Text> when your phone is pointing North.</Text>
-      </View>
+      
+      {!IS_SMALL_SCREEN && (
+        <View style={styles.gridInfo}>
+          <Text style={styles.gridInfoText}>Set the <Text style={styles.gridInfoTitle}>Frequency</Text> of directional North sounds.</Text>
+          <Text style={styles.gridInfoText}>Start small. Requires 🎧.</Text>
+          <Text style={styles.gridInfoText}></Text>
+          <Text style={styles.gridInfoText}>The <Text style={styles.gridInfoTitle}>Learning</Text> mode plays a cue 1s before every North sound.</Text>
+          <Text style={styles.gridInfoText}>When you hear it, quickly guess where's North.</Text>
+          <Text style={styles.gridInfoText}></Text>
+          <Text style={styles.gridInfoText}>Replace sounds with <Text style={styles.gridInfoTitle}>Vibration</Text> when your phone is pointing North.</Text>
+        </View>
+      )}
 
       <TouchableOpacity style={styles.advancedToggle} onPress={scrollToAdvanced}>
-        <Text style={styles.advancedToggleText}>Advanced ▼</Text>
+        <Text style={styles.advancedToggleText}>{advancedButtonText}</Text>
       </TouchableOpacity>
+      
+      <View style={styles.footerSpacer} />
+
       <Text style={styles.status}>{status}</Text>
     </View>
 
@@ -783,7 +837,23 @@ export default function App() {
 
     <View style={[styles.page, { height: screenHeight }]}>
       <View style={styles.advancedContainer}>
-        <Text style={styles.advancedTitle}>Advanced</Text>
+      {!IS_SMALL_SCREEN && (<Text style={styles.advancedTitle}>{advancedTitleText}</Text>)}
+        
+        {IS_SMALL_SCREEN && (
+          <View style={styles.settingBox}>
+            <View style={{width: '100%', paddingTop: verticalScale(5)}}>
+                <Text style={styles.settingDescription}>
+                  Set the <Text style={styles.settingDescriptionWhite}>Frequency</Text> of directional sounds. Start small. Requires 🎧.
+                </Text>
+                <Text style={styles.settingDescription}>
+                  The <Text style={styles.settingDescriptionWhite}>Learning</Text> mode plays a cue before the sound, helping you anticipate the direction.
+                </Text>
+                <Text style={styles.settingDescription}>
+                  Use <Text style={styles.settingDescriptionWhite}>Vibration</Text> mode for silent, tactile feedback when you face North.
+                </Text>
+            </View>
+          </View>
+        )}
 
         <View style={styles.settingBox}>
           <Text style={styles.settingLabel}>Calibrate Compass</Text>
@@ -888,7 +958,6 @@ export default function App() {
         </TouchableOpacity>
       </Modal>
       </ScrollView>
-      </View>
     </LinearGradient>
   );
 }
@@ -900,106 +969,73 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     alignItems: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: scale(20),
   },
-  contentWrapper: {
-    flex: 1,
-    width: '100%',
-    maxWidth: 600,
+  page: {
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    paddingVertical: verticalScale(20),
   },
   header: {
     width: '100%',
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 60,
-    marginBottom: 20,
+    marginTop: IS_SMALL_SCREEN ? verticalScale(30) : verticalScale(60),
+    marginBottom: verticalScale(20),
+    minHeight: IS_SMALL_SCREEN ? 0 : fontScale(24) * 1.2, // Reserve space to prevent jump
   },
   title: {
-    fontSize: 24,
+    fontSize: fontScale(24),
     color: '#fff',
     fontWeight: 'bold',
   },
   compassWrap: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginVertical: 20,
+    marginVertical: verticalScale(20),
     position: 'relative',
   },
   pulse: {
     position: 'absolute',
-    borderWidth: 2,
+    borderWidth: scale(2),
     borderColor: '#EF4444',
     opacity: 0.4,
     backgroundColor: 'transparent',
     shadowColor: '#EF4444',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.6,
-    shadowRadius: 8,
+    shadowRadius: scale(8),
   },
   readout: {
     alignItems: 'center',
-    marginVertical: 20,
+    marginVertical: verticalScale(20),
   },
   deg: {
-    fontSize: 48,
+    fontSize: fontScale(48),
     color: '#fff',
     fontWeight: 'bold',
     textShadowColor: 'rgba(0,126,255,0.5)',
-    textShadowRadius: 10,
+    textShadowRadius: scale(10),
   },
   dir: {
-    fontSize: 24,
+    fontSize: fontScale(24),
     color: 'rgba(255,255,255,0.8)',
-    marginTop: 8,
-  },
-  settingBox: {
-    width: '100%',
-    padding: 15,
-    backgroundColor: 'rgba(30,45,70,0.5)',
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  switchRow: {
-    width: '100%',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  settingLabel: {
-    color: '#fff',
-    fontSize: 16,
-    marginBottom: 4,
-  },
-  settingDescription: {
-    color: 'rgba(255,255,255,0.6)',
-    fontSize: 13,
-    marginTop: 2,
-  },
-  settingDescriptionWhite: {
-    color: 'rgba(255,255,255,1)',
-    fontSize: 13,
-    marginTop: 2,
-  },
-  settingDescriptionBold: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 13,
-    marginTop: 2,
-    fontWeight: 'bold',
+    marginTop: verticalScale(8),
   },
   gridContainer: {
     width: '90%',
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    marginTop: 10,
+    marginTop: verticalScale(10),
   },
   gridItem: {
     width: '32%',
-    marginBottom: 10,
-    paddingVertical: 12,
+    marginBottom: verticalScale(10),
+    paddingVertical: verticalScale(12),
     backgroundColor: 'rgba(30,45,70,0.5)',
-    borderRadius: 8,
+    borderRadius: scale(8),
     borderWidth: 1,
     borderColor: 'rgba(148,163,184,0.3)',
     alignItems: 'center',
@@ -1012,108 +1048,128 @@ const styles = StyleSheet.create({
   },
   gridLabel: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: fontScale(14),
   },
   gridValue: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: fontScale(16),
     fontWeight: '600',
-    marginTop: 4,
-  },
-  advancedContainer: {
-    width: '90%',
-    gap: 12,
-    marginTop: 20,
-  },
-  advancedTitle: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 6,
-    marginTop: 30,
-    textAlign: 'center',
-  },
-  page: {
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-    paddingVertical: 20,
+    marginTop: verticalScale(4),
   },
   gridInfo: {
-    width: '90%',
-    marginTop: 4,
+    width: '100%',
+    paddingHorizontal: scale(5),
+    marginTop: verticalScale(4),
   },
   gridInfoText: {
     color: 'rgba(255,255,255,0.6)',
-    fontSize: 12,
+    fontSize: fontScale(12),
     textAlign: 'center',
+    lineHeight: fontScale(12) * 1.4,
   },
   gridInfoTitle: {
     color: 'rgba(255,255,255,1)',
-    fontSize: 12,
-    textAlign: 'center',
+    fontWeight: 'bold',
   },
   advancedToggle: {
-    marginTop: 16,
-    paddingVertical: 8,
+    marginTop: verticalScale(16),
+    paddingVertical: verticalScale(8),
     width: '90%',
     alignItems: 'center',
   },
   advancedToggleText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: fontScale(16),
   },
-  resetButton: {
-    backgroundColor: '#475569',
-    marginTop: 6,
+  advancedContainer: {
+    width: '90%',
+    gap: verticalScale(12),
+    marginTop: verticalScale(20),
   },
-  dropdownButton: {
-    backgroundColor: 'rgba(248,250,252,0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(148,163,184,0.3)',
-    borderRadius: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+  advancedTitle: {
+    color: '#fff',
+    fontSize: fontScale(18),
+    fontWeight: '600',
+    marginBottom: verticalScale(6),
+    marginTop: verticalScale(30),
+    textAlign: 'center',
+  },
+  settingBox: {
+    width: '100%',
+    padding: scale(15),
+    backgroundColor: 'rgba(30,45,70,0.5)',
+    borderRadius: scale(8),
+    alignItems: 'center',
+  },
+  settingLabel: {
+    color: '#fff',
+    fontSize: fontScale(16),
+    marginBottom: verticalScale(4),
+    alignSelf: 'flex-start',
+    fontWeight: '600'
+  },
+  switchRow: {
+    width: '100%',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    width: 200,
-    marginTop: 10,
   },
-  dropdownButtonText: {
+  settingDescription: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: fontScale(13.5),
+    marginTop: verticalScale(4),
+    lineHeight: fontScale(13.5) * 1.4,
+  },
+  settingDescriptionWhite: {
+    color: 'rgba(255,255,255,1)',
+    fontWeight: 'bold',
+  },
+  settingDescriptionBold: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: fontScale(13),
+    marginTop: verticalScale(8),
+    fontWeight: 'bold',
+  },
+  calibrateButton: {
+    backgroundColor: '#3B82F6',
+    paddingVertical: verticalScale(10),
+    paddingHorizontal: scale(20),
+    borderRadius: scale(8),
+    marginTop: verticalScale(12),
+  },
+  calibrateButtonDisabled: {
+    backgroundColor: '#475569',
+  },
+  calibrateButtonText: {
     color: '#fff',
-    fontSize: 16,
-    fontWeight: '500',
+    fontSize: fontScale(16),
+    fontWeight: '600',
   },
-  dropdownArrow: {
-    color: 'rgba(255,255,255,0.6)',
-    fontSize: 12,
+  resetButton: {
+    backgroundColor: '#475569',
+    marginTop: verticalScale(6),
   },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.7)',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 12,
+    padding: scale(20),
   },
   modalContent: {
-    width: '80%',
-    maxWidth: 300,
+    width: '90%',
+    maxWidth: scale(320),
   },
   dropdownMenu: {
     backgroundColor: 'rgba(15,23,42,0.98)',
     borderWidth: 1,
     borderColor: 'rgba(148,163,184,0.3)',
-    borderRadius: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 20,
-    maxHeight: 350,
+    borderRadius: scale(8),
+    maxHeight: screenHeight * 0.5,
   },
   dropdownItem: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    paddingVertical: verticalScale(14),
+    paddingHorizontal: scale(16),
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -1125,7 +1181,7 @@ const styles = StyleSheet.create({
   },
   dropdownItemText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: fontScale(16),
   },
   dropdownItemTextSelected: {
     color: '#3B82F6',
@@ -1133,30 +1189,18 @@ const styles = StyleSheet.create({
   },
   checkmark: {
     color: '#3B82F6',
-    fontSize: 16,
+    fontSize: fontScale(16),
     fontWeight: 'bold',
-  },
-  calibrateButton: {
-    backgroundColor: '#3B82F6',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    marginTop: 6,
-  },
-  calibrateButtonDisabled: {
-    backgroundColor: '#475569',
-  },
-  calibrateButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
   },
   status: {
     position: 'absolute',
-    bottom: 40,
+    bottom: verticalScale(25),
     width: '100%',
     textAlign: 'center',
     color: 'rgba(255,255,255,0.7)',
-    fontSize: 14,
+    fontSize: fontScale(14),
+  },
+  footerSpacer: {
+    height: verticalScale(40) + fontScale(14) + verticalScale(15),
   },
 });
