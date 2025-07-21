@@ -13,6 +13,7 @@ import * as ScreenOrientation from 'expo-screen-orientation';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Line, Text as SvgText, G, Defs, RadialGradient, Stop, Polygon } from 'react-native-svg';
 import { Buffer } from 'buffer';
+import BackgroundHaptics from "background-haptics";
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -145,16 +146,10 @@ export default function App() {
 
   const triggerVibration = async () => {
     try {
-      if(isBackground.current) {
-        Vibration.vibrate(200);
+      if (isBackground.current) {
+        await BackgroundHaptics.impact('heavy');
       } else {
-        //const state = await Battery.getPowerStateAsync();
-        //const low = state?.lowPowerMode;
-        //if (low) {
-        //  await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        //} else {
-          await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-        //}
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
       }
     } catch (err) {
       Vibration.vibrate(200);
