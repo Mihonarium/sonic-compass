@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet, View, Text, TouchableOpacity,
   Alert, AppState, Dimensions, ScrollView, Switch, Modal,
-  Vibration
+  Vibration, NativeModules
 } from 'react-native';
 import { Audio, InterruptionModeIOS, InterruptionModeAndroid } from 'expo-av';
 // import * as Battery from 'expo-battery';
@@ -15,6 +15,7 @@ import Svg, { Circle, Line, Text as SvgText, G, Defs, RadialGradient, Stop, Poly
 import { Buffer } from 'buffer';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+const { BackgroundHaptic } = NativeModules;
 
 ////////////////////////////////////////////////////////////////////////////////
 // 0. ADAPTIVE UI SCALING UTILITIES ///////////////////////////////////////////
@@ -146,7 +147,11 @@ export default function App() {
   const triggerVibration = async () => {
     try {
       if(isBackground.current) {
-        Vibration.vibrate(200);
+        if (BackgroundHaptic && BackgroundHaptic.trigger) {
+          BackgroundHaptic.trigger();
+        } else {
+          Vibration.vibrate(200);
+        }
       } else {
         //const state = await Battery.getPowerStateAsync();
         //const low = state?.lowPowerMode;
