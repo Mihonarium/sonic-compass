@@ -6,10 +6,11 @@ Pod::Spec.new do |s|
   s.version      = package['version']
   s.summary      = package['description']
   s.description  = package['description']
+  s.homepage     = package['homepage']
   s.license      = package['license']
   s.author       = package['author']
   s.platforms    = { ios: '15.1' }
-  s.source       = { git: 'https://example.com/BackgroundHaptics.git' }
+  s.source       = { git: 'https://github.com/Mihonarium/sonic-compass.git' }
   s.static_framework = true
   s.source_files  = '**/*.{h,m,swift}'
   s.dependency 'ExpoModulesCore'
