@@ -55,6 +55,7 @@ One second later, a sound plays from the actual direction of North, providing im
 - [ ] Better sounds: chimes? bells? drums? there are all sorts of sounds potentially more pleasant than what the app uses
 - [ ] Apple Watch version
 - [ ] Save generated sounds to not have to generate them every time
+  - [ ] or just generate them in advance and distribute with the app?
 
 ## Setup Instructions
 
