@@ -39,6 +39,9 @@ One second later, a sound plays from the actual direction of North, providing im
 
 - [x] Offsets for where's forward
 - [x] Vibration mode
+- [x] Nicer vibration when the app is on the background: it should be possible in principle, I have no idea how to do that
+  - [x] Yay, we did that! Gemini made five failed builds, codex made two failed builds, but I was able to ignore its incorrect suggestions for how to fix it and fixed them myself! 
+  - [ ] Even nicer vibrations in-app and on the background (maybe only on north/when crossing it instead of each of five degrees around 0*?)
 - [ ] Spatial audio for supporting headphones?
 - [ ] Presets:
   - Start preset(s): sound every second?
@@ -50,7 +53,6 @@ One second later, a sound plays from the actual direction of North, providing im
 - [ ] Add a setting for true north
 - [ ] Better directional sound: ask LLMs about all the wonderful ways directional sound can be made more realistic!
 - [ ] Better sounds: chimes? bells? drums? there are all sorts of sounds potentially more pleasant than what the app uses
-- [ ] Nicer vibration when the app is on the background: it should be possible in principle, I have no idea how to do that
 - [ ] Apple Watch version
 - [ ] Save generated sounds to not have to generate them every time
 
