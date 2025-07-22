@@ -1,6 +1,11 @@
 {
   "name": "background-haptics",
   "version": "1.0.0",
+  "author": "Mikhail Samin",
+  "license": "Proprietary",
+  "homepage": "https://contact.ms/compass/",
+  "summary": "background haptics",
+  "description": "background haptics",
   "main": "src/index.js",
   "types": "src/index.js",
   "sideEffects": false,
