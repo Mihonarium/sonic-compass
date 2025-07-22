@@ -1,0 +1,11 @@
+{
+  "name": "background-haptics",
+  "version": "1.0.0",
+  "main": "src/index.js",
+  "types": "src/index.js",
+  "sideEffects": false,
+  "dependencies": {},
+  "peerDependencies": {
+    "expo": "*"
+  }
+}

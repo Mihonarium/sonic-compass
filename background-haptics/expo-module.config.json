@@ -1,0 +1,7 @@
+{
+  "name": "background-haptics",
+  "platforms": ["ios"],
+  "ios": {
+    "modules": ["BackgroundHapticsModule"]
+  }
+}
