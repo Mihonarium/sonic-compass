@@ -55,6 +55,8 @@ One second later, a sound plays from the actual direction of North, providing im
 - [ ] Android version
 - [ ] Save generated sounds to not have to generate them every time
   - [ ] or just generate them in advance and distribute with the app?
+- [ ] Only vibrate exactly on North/when passing it, not on each of the nearby degrees
+- [ ] Add a mode when nothing happens if the phone points north
 
 ## Setup Instructions
 
