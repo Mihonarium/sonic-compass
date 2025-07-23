@@ -6,7 +6,7 @@ You'll continuously be able to feel that North is *right there*.
 
 Test preview of the app:
 
-[<img width="220" height="75" alt="image" src="https://github.com/user-attachments/assets/e1a7b56e-e7be-4bee-9bf5-7af56c1e7770" />](https://testflight.apple.com/join/sUKCjAyP)
+[<img width="220" height="75" alt="image" src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" />](https://apps.apple.com/gb/app/sonic-compass/id6746952992)
 
 ## How It Works: A Feedback Loop for Your Brain
 
