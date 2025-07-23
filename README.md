@@ -93,12 +93,13 @@ eas submit --platform ios
 
 ```
 /
-├── App.js             # Main application component
-├── package.json       # Dependencies and scripts
-├── app.json           # Expo configuration
-├── eas.json           # EAS Build configuration
-├── assets/            # Images & audio files
-└── README.md          # This file
+├── App.js               # Main application component
+├── package.json         # Dependencies and scripts
+├── app.json             # Expo configuration
+├── eas.json             # EAS Build configuration
+├── assets/              # Images & audio files
+├── background-haptics/  # A background haptics module for iOS
+└── README.md            # This file
 ```
 
 ## Usage
