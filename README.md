@@ -55,6 +55,7 @@ One second later, a sound plays from the actual direction of North, providing im
 - [x] Android version
 - [ ] Save generated sounds to not have to generate them every time
   - [ ] or just generate them in advance and distribute with the app?
+- [ ] Remember settings
 
 ## Setup Instructions
 
