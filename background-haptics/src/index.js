@@ -1,8 +1,13 @@
 import { Platform } from 'react-native';
-import BackgroundHapticsModule from './module';
+
+let BackgroundHapticsModule = null;
+if (Platform.OS === 'ios') {
+  BackgroundHapticsModule = require('./module').default;
+}
 
 export function impact(style = 'medium') {
-  if (Platform.OS !== 'ios') {
+  if (!BackgroundHapticsModule) {
+    // Resolve immediately on unsupported platforms
     return Promise.resolve();
   }
   return BackgroundHapticsModule.impact(style);

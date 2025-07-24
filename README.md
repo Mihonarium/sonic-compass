@@ -25,7 +25,7 @@ One second later, a sound plays from the actual direction of North, providing im
 - Real-time compass with smooth rotation
 - Audio notifications when facing north
 - Directional audio cues with configurable frequency
-- Background audio playback (works when app is backgrounded)
+- Background audio playback (works in the background on iOS and Android)
 - Optional offset calibration for using the phone at an angle (including in a pocket)
 - No location tracking required
 - Accessibility-friendly design
@@ -52,7 +52,7 @@ One second later, a sound plays from the actual direction of North, providing im
 - [ ] Better directional sound: ask LLMs about all the wonderful ways directional sound can be made more realistic!
 - [ ] Better sounds: chimes? bells? drums? there are all sorts of sounds potentially more pleasant than what the app uses
 - [ ] Apple Watch version
-- [ ] Android version
+- [x] Android version
 - [ ] Save generated sounds to not have to generate them every time
   - [ ] or just generate them in advance and distribute with the app?
 - [ ] Only vibrate exactly on North/when passing it, not on each of the nearby degrees
@@ -115,7 +115,7 @@ eas submit --platform ios
 
 ## Notes
 
-- Requires iOS device with magnetometer
+- Requires a device with a magnetometer (Android or iOS)
 - Audio will mix with other apps (doesn't interrupt music/calls)
 - No location permissions required
 - Complies with App Store guidelines for background audio
