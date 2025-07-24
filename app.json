@@ -40,8 +40,7 @@
         "backgroundColor": "#FFFFFF"
       },
       "permissions": [
-        "VIBRATE",
-        "FOREGROUND_SERVICE"
+        "VIBRATE"
       ]
     },
     "web": {
