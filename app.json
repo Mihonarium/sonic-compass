@@ -40,8 +40,15 @@
         "backgroundColor": "#FFFFFF"
       },
       "permissions": [
-        "VIBRATE"
-      ]
+        "VIBRATE",
+        "FOREGROUND_SERVICE",
+        "WAKE_LOCK"
+      ],
+      "foregroundService": {
+        "notificationTitle": "Sonic Compass active",
+        "notificationBody": "Running in background",
+        "notificationColor": "#0f1a2b"
+      }
     },
     "web": {
       "favicon": "./assets/favicon.png"
