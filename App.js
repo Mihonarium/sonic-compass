@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet, View, Text, TouchableOpacity,
   Alert, AppState, Dimensions, ScrollView, Switch, Modal,
-  Vibration
+  Vibration, Platform
 } from 'react-native';
 import { Audio, InterruptionModeIOS, InterruptionModeAndroid } from 'expo-av';
 // import * as Battery from 'expo-battery';
@@ -147,7 +147,11 @@ export default function App() {
   const triggerVibration = async () => {
     try {
       if (isBackground.current) {
-        await BackgroundHaptics.impact('heavy');
+        if (Platform.OS === 'android') {
+          Vibration.vibrate(200);
+        } else {
+          await BackgroundHaptics.impact('heavy');
+        }
       } else {
         await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
       }
@@ -547,8 +551,11 @@ export default function App() {
       isBackground.current = state !== 'active';
       if (state === 'background') {
         setStatus('Running in background');
+        // Keep a silent sound playing so audio remains active on Android
+        startSilentSound();
       } else if (state === 'active') {
         setStatus('Ready');
+        stopSilentSound();
       }
     });
     return () => sub?.remove();
