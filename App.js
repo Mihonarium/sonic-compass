@@ -1,8 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  StyleSheet, View, Text, TouchableOpacity,
-  Alert, AppState, Dimensions, ScrollView, Switch, Modal,
-  Vibration
+  StyleSheet,
+  View,
+  Text,
+  TouchableOpacity,
+  Alert,
+  AppState,
+  Dimensions,
+  ScrollView,
+  Switch,
+  Modal,
+  Vibration,
+  Platform,
 } from 'react-native';
 import { Audio, InterruptionModeIOS, InterruptionModeAndroid } from 'expo-av';
 // import * as Battery from 'expo-battery';
@@ -13,7 +22,12 @@ import * as ScreenOrientation from 'expo-screen-orientation';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Line, Text as SvgText, G, Defs, RadialGradient, Stop, Polygon } from 'react-native-svg';
 import { Buffer } from 'buffer';
-import BackgroundHaptics from "background-haptics";
+// background-haptics is an iOS-only native module used to provide
+// haptic feedback when the app is in the background. Requiring it
+// directly on Android causes the bundle to fail to load, so we only
+// load it conditionally on iOS.
+const BackgroundHaptics =
+  Platform.OS === 'ios' ? require('background-haptics').default : null;
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -147,8 +161,14 @@ export default function App() {
   const triggerVibration = async () => {
     try {
       if (isBackground.current) {
-        await BackgroundHaptics.impact('heavy');
+        if (Platform.OS === 'ios' && BackgroundHaptics) {
+          await BackgroundHaptics.impact('heavy');
+        } else {
+          // On Android we fallback to the standard vibration API
+          Vibration.vibrate(200);
+        }
       } else {
+        // Foreground vibrations use expo-haptics when available
         await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
       }
     } catch (err) {

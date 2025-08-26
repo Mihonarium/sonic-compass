@@ -41,7 +41,11 @@
       },
       "permissions": [
         "VIBRATE"
-      ]
+      ],
+      "foregroundService": {
+        "notificationTitle": "Sonic Compass",
+        "notificationBody": "Running in the background"
+      }
     },
     "web": {
       "favicon": "./assets/favicon.png"
