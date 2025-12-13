@@ -14,6 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Line, Text as SvgText, G, Defs, RadialGradient, Stop, Polygon } from 'react-native-svg';
 import { Buffer } from 'buffer';
 import BackgroundHaptics from "background-haptics";
+import { initBackgroundAudio, startBackgroundService, stopBackgroundService } from './audioService';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -444,6 +445,7 @@ export default function App() {
   const initializeApp = async () => {
     try {
       setStatus('Initializing...');
+      await initBackgroundAudio(); // Initialize Android background service
       await startCompass();
       await initAudio();
       setStatus('Ready');
@@ -543,12 +545,16 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const sub = AppState.addEventListener('change', state => {
+    const sub = AppState.addEventListener('change', async (state) => {
       isBackground.current = state !== 'active';
       if (state === 'background') {
         setStatus('Running in background');
+        // Start Android foreground service to keep app alive
+        await startBackgroundService();
       } else if (state === 'active') {
         setStatus('Ready');
+        // Stop Android foreground service when app is active
+        await stopBackgroundService();
       }
     });
     return () => sub?.remove();
