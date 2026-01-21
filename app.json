@@ -39,8 +39,12 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FFFFFF"
       },
+      "package": "ms.contact.compass",
       "permissions": [
-        "VIBRATE"
+        "VIBRATE",
+        "ACCESS_FINE_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_MEDIA_PLAYBACK"
       ]
     },
     "web": {
@@ -52,6 +56,7 @@
       }
     },
     "plugins": [
+      "expo-av",
       [
         "expo-build-properties",
         {

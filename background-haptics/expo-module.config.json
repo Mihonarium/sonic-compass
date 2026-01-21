@@ -1,7 +1,10 @@
 {
   "name": "background-haptics",
-  "platforms": ["ios"],
+  "platforms": ["ios", "android"],
   "ios": {
     "modules": ["BackgroundHapticsModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.backgroundhaptics.BackgroundHapticsModule"]
   }
 }

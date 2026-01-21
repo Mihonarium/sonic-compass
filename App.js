@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet, View, Text, TouchableOpacity,
   Alert, AppState, Dimensions, ScrollView, Switch, Modal,
-  Vibration
+  Vibration, Platform, PermissionsAndroid
 } from 'react-native';
 import { Audio, InterruptionModeIOS, InterruptionModeAndroid } from 'expo-av';
 // import * as Battery from 'expo-battery';
@@ -165,8 +165,8 @@ export default function App() {
         staysActiveInBackground: true,
         playsInSilentModeIOS: true,
         interruptionModeIOS: InterruptionModeIOS.MixWithOthers,
-        interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
-        shouldDuckAndroid: false,
+        interruptionModeAndroid: InterruptionModeAndroid.DuckOthers,
+        shouldDuckAndroid: true,
         playThroughEarpieceAndroid: false,
       });
 
@@ -415,9 +415,38 @@ export default function App() {
     //}
   };
 
+  const requestLocationPermission = async () => {
+    if (Platform.OS === 'android') {
+      try {
+        const granted = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+          {
+            title: 'Location Permission Required',
+            message: 'This app needs location permission to access the compass sensor on Android.',
+            buttonNeutral: 'Ask Me Later',
+            buttonNegative: 'Cancel',
+            buttonPositive: 'OK',
+          },
+        );
+        return granted === PermissionsAndroid.RESULTS.GRANTED;
+      } catch (err) {
+        console.warn(err);
+        return false;
+      }
+    }
+    return true;
+  };
+
   const startCompass = async () => {
     try {
       setStatus('Starting compass...');
+      
+      if (Platform.OS === 'android') {
+        const hasPermission = await requestLocationPermission();
+        if (!hasPermission) {
+          setStatus('Location permission denied - compass may not work');
+        }
+      }
       
       CompassHeading.start(1, ({ heading, accuracy }) => {
         updateCompass(heading);
