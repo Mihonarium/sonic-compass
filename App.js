@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet, View, Text, TouchableOpacity,
   AppState, Dimensions, ScrollView, Modal,
-  Vibration
+  Vibration, Platform
 } from 'react-native';
 import { Audio, InterruptionModeIOS, InterruptionModeAndroid } from 'expo-av';
 import CompassHeading from 'react-native-compass-heading';
@@ -116,6 +116,7 @@ export default function App() {
   const [heading, setHeading] = useState(0);
   const [freq, setFreq] = useState(0); // Start with Off
   const [north, setNorth] = useState(false);
+  const [lastDir, setLastDir] = useState(0);
   const [status, setStatus] = useState('Initializing...');
   const [showDropdown, setShowDropdown] = useState(false);
   const [questionSoundEnabled, setQuestionSoundEnabled] = useState(false);
@@ -147,12 +148,17 @@ export default function App() {
   const triggerVibration = async () => {
     try {
       if (isBackground.current) {
-        await BackgroundHaptics.impact('heavy');
+        if (Platform.OS === 'ios') {
+          await BackgroundHaptics.impact('heavy');
+        } else {
+          // Android: Vibration API works in background if the process is alive
+          Vibration.vibrate(100);
+        }
       } else {
         await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
       }
     } catch (err) {
-      Vibration.vibrate(200);
+      Vibration.vibrate(100);
     }
   };
 
@@ -170,6 +176,7 @@ export default function App() {
       const stored = await AsyncStorage.getItem(SETTINGS_KEY);
       if (stored) {
         const settings = JSON.parse(stored);
+        if (!settings || typeof settings !== 'object') return;
         if (settings.freq !== undefined) setFreq(settings.freq);
         if (settings.questionSoundEnabled !== undefined) setQuestionSoundEnabled(settings.questionSoundEnabled);
         if (settings.vibrationMode !== undefined) {
@@ -195,8 +202,8 @@ export default function App() {
         staysActiveInBackground: true,
         playsInSilentModeIOS: true,
         interruptionModeIOS: InterruptionModeIOS.MixWithOthers,
-        interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
-        shouldDuckAndroid: false,
+        interruptionModeAndroid: InterruptionModeAndroid.DuckOthers,
+        shouldDuckAndroid: true,
         playThroughEarpieceAndroid: false,
       });
 
@@ -356,11 +363,13 @@ export default function App() {
             questionTimeoutRef.current = setTimeout(() => {
               playDir(); // Will get current heading at time of playing
               lastDirectionalSoundTime.current = Date.now();
+              setLastDir(Date.now());
             }, QUESTION_SOUND_DELAY);
           } else {
             // Play directional sound immediately
             playDir();
             lastDirectionalSoundTime.current = Date.now();
+            setLastDir(Date.now());
           }
         }
       };

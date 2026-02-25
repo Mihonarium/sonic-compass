@@ -8,7 +8,7 @@ React Native (Expo SDK 53) app that helps users develop an intuitive sense of ma
 
 **Single-file app**: All UI and logic lives in `App.js` (~1200 lines). No router, no state management library.
 
-**Native module**: `background-haptics/` is a local Expo module (Swift, iOS-only native code) that provides haptic feedback when the app is backgrounded, using `AudioServicesPlaySystemSound`. On Android, the module falls back to a no-op; haptics use `expo-haptics` and `Vibration` API instead.
+**Native module**: `background-haptics/` is a local Expo module (Swift, iOS-only native code) that provides haptic feedback when the app is backgrounded, using `AudioServicesPlaySystemSound`. On Android, the module falls back to a no-op; background vibration uses `Vibration.vibrate()` directly instead.
 
 ## Key Files
 
@@ -49,10 +49,21 @@ eas build --platform android --profile production
 eas submit --platform ios
 ```
 
-## Important Notes
+## Platform Notes
+
+### iOS
+- Background audio requires `UIBackgroundModes: ["audio"]` in Info.plist
+- Uses `InterruptionModeIOS.MixWithOthers` to not interrupt other audio
+- Background haptics use AudioToolbox SystemSoundIDs (works reliably)
+
+### Android
+- **Background audio is best-effort**: expo-av does not run a foreground service, so Android may kill audio after 1-3 minutes (Doze mode). A foreground service with notification would be needed for reliable background operation.
+- Uses `InterruptionModeAndroid.DuckOthers` to briefly lower other apps' audio during compass cues
+- Background vibration uses `Vibration.vibrate()` directly (only works while process is alive)
+- `FOREGROUND_SERVICE` and `VIBRATE` permissions are declared
+
+## General Notes
 
 - No test suite exists; changes must be verified manually on device
-- Background audio requires `UIBackgroundModes: ["audio"]` in Info.plist
-- The app uses `InterruptionModeIOS.MixWithOthers` to not interrupt other audio
 - Compass calibration offset is persisted; raw heading is adjusted at read time
 - The `vibrationModeRef` pattern (ref synced to state) is needed because interval callbacks capture stale state closures

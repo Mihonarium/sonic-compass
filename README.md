@@ -119,3 +119,4 @@ eas submit --platform ios
 - Audio will mix with other apps (doesn't interrupt music/calls)
 - No location permissions required
 - Complies with App Store guidelines for background audio
+- **Android limitation**: Background audio may stop after 1-3 minutes due to Android's battery optimization (Doze mode). expo-av does not use a foreground service. For reliable background operation, a foreground service with notification would be needed.
