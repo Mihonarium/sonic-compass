@@ -22,12 +22,10 @@
       "bundleIdentifier": "ms.contact.compass",
       "infoPlist": {
         "UIBackgroundModes": [
-          "audio",
           "audio"
         ],
         "NSLocationWhenInUseUsageDescription": "This app uses device sensors for compass functionality.",
         "UIRequiredDeviceCapabilities": [
-          "magnetometer",
           "magnetometer"
         ],
         "ITSAppUsesNonExemptEncryption": false
@@ -40,7 +38,8 @@
         "backgroundColor": "#FFFFFF"
       },
       "permissions": [
-        "VIBRATE"
+        "VIBRATE",
+        "FOREGROUND_SERVICE"
       ]
     },
     "web": {

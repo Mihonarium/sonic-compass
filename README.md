@@ -52,12 +52,12 @@ One second later, a sound plays from the actual direction of North, providing im
 - [ ] Better directional sound: ask LLMs about all the wonderful ways directional sound can be made more realistic!
 - [ ] Better sounds: chimes? bells? drums? there are all sorts of sounds potentially more pleasant than what the app uses
 - [ ] Apple Watch version
-- [ ] Android version
+- [x] Android version
 - [ ] Save generated sounds to not have to generate them every time
   - [ ] or just generate them in advance and distribute with the app?
 - [ ] Only vibrate exactly on North/when passing it, not on each of the nearby degrees
 - [ ] Add a mode when nothing happens if the phone points north
-- [ ] Remember settings
+- [x] Remember settings
 
 ## Setup Instructions
 
@@ -115,7 +115,7 @@ eas submit --platform ios
 
 ## Notes
 
-- Requires iOS device with magnetometer
+- Requires iOS or Android device with magnetometer
 - Audio will mix with other apps (doesn't interrupt music/calls)
 - No location permissions required
 - Complies with App Store guidelines for background audio

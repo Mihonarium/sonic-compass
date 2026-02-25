@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet, View, Text, TouchableOpacity,
-  Alert, AppState, Dimensions, ScrollView, Switch, Modal,
+  AppState, Dimensions, ScrollView, Modal,
   Vibration
 } from 'react-native';
 import { Audio, InterruptionModeIOS, InterruptionModeAndroid } from 'expo-av';
-// import * as Battery from 'expo-battery';
 import CompassHeading from 'react-native-compass-heading';
 import * as Haptics from 'expo-haptics';
 import * as FileSystem from 'expo-file-system';
@@ -13,6 +12,7 @@ import * as ScreenOrientation from 'expo-screen-orientation';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Line, Text as SvgText, G, Defs, RadialGradient, Stop, Polygon } from 'react-native-svg';
 import { Buffer } from 'buffer';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import BackgroundHaptics from "background-haptics";
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
@@ -49,6 +49,7 @@ const FREQ_OPTS = [
 ];
 const SAMPLE_RATE = 44100;
 const QUESTION_SOUND_DELAY = 1000; // 1 second before directional sound
+const SETTINGS_KEY = 'sonic_compass_settings';
 
 ////////////////////////////////////////////////////////////////////////////////
 // 2. AUDIO HELPERS /////////////////////////////////////////////////////////////
@@ -115,14 +116,12 @@ export default function App() {
   const [heading, setHeading] = useState(0);
   const [freq, setFreq] = useState(0); // Start with Off
   const [north, setNorth] = useState(false);
-  const [lastDir, setLastDir] = useState(0);
   const [status, setStatus] = useState('Initializing...');
   const [showDropdown, setShowDropdown] = useState(false);
   const [questionSoundEnabled, setQuestionSoundEnabled] = useState(false);
   const [calibrationOffset, setCalibrationOffset] = useState(0);
   const [calibrating, setCalibrating] = useState(false);
   const [vibrationMode, setVibrationMode] = useState(false);
-  //const [lowPower, setLowPower] = useState(false);
 
   // ----- REFS ----------------------------------------------------------------
   const rotRef = useRef(0);
@@ -143,6 +142,7 @@ export default function App() {
   const calibrationTimeoutRef = useRef(null);
   const vibrationModeRef = useRef(false);
   const isBackground = useRef(false);
+  const settingsLoaded = useRef(false);
 
   const triggerVibration = async () => {
     try {
@@ -153,6 +153,36 @@ export default function App() {
       }
     } catch (err) {
       Vibration.vibrate(200);
+    }
+  };
+
+  // ----- SETTINGS PERSISTENCE ------------------------------------------------
+  const saveSettings = async (settings) => {
+    try {
+      await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+    } catch (error) {
+      console.error('Failed to save settings:', error);
+    }
+  };
+
+  const loadSettings = async () => {
+    try {
+      const stored = await AsyncStorage.getItem(SETTINGS_KEY);
+      if (stored) {
+        const settings = JSON.parse(stored);
+        if (settings.freq !== undefined) setFreq(settings.freq);
+        if (settings.questionSoundEnabled !== undefined) setQuestionSoundEnabled(settings.questionSoundEnabled);
+        if (settings.vibrationMode !== undefined) {
+          setVibrationMode(settings.vibrationMode);
+          vibrationModeRef.current = settings.vibrationMode;
+        }
+        if (settings.calibrationOffset !== undefined) {
+          setCalibrationOffset(settings.calibrationOffset);
+          calibrationOffsetRef.current = settings.calibrationOffset;
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load settings:', error);
     }
   };
 
@@ -176,7 +206,6 @@ export default function App() {
         { uri: silentURI }, 
         { shouldPlay: false, volume: 0.01, isLooping: true }
       )).sound;
-      
 
       // Create north sound (celebratory tone)
       const northURI = await writeWav('north.wav', sineBuffer(880, 0.3));
@@ -226,7 +255,6 @@ export default function App() {
           northSoundPlaying.current = false;
         }, 300);
         await northSound.current?.replayAsync();
-
       }
     } catch (error) {
       console.error('North sound error:', error);
@@ -328,13 +356,11 @@ export default function App() {
             questionTimeoutRef.current = setTimeout(() => {
               playDir(); // Will get current heading at time of playing
               lastDirectionalSoundTime.current = Date.now();
-              setLastDir(Date.now());
             }, QUESTION_SOUND_DELAY);
           } else {
             // Play directional sound immediately
             playDir();
             lastDirectionalSoundTime.current = Date.now();
-            setLastDir(Date.now());
           }
         }
       };
@@ -397,14 +423,9 @@ export default function App() {
         pulseRef.current.setNativeProps({ style: { opacity: 0 } });
       }
       
-      //if (freq > 0) {
-        startSilentSound();
-      //}
+      startSilentSound();
     }
 
-    //if (freq === 0) {
-    //  stopSilentSound();
-    //} else if (!northNow && freq > 0) {
     if (!northNow || vibrationModeRef.current) {
       const timeSinceLastSound = Date.now() - lastDirectionalSoundTime.current;
       const timeSinceLastNorthSound = Date.now() - lastNorthSoundTime.current;
@@ -412,7 +433,6 @@ export default function App() {
         startSilentSound();
       }
     }
-    //}
   };
 
   const startCompass = async () => {
@@ -444,6 +464,7 @@ export default function App() {
   const initializeApp = async () => {
     try {
       setStatus('Initializing...');
+      await loadSettings();
       await startCompass();
       await initAudio();
       setStatus('Ready');
@@ -464,17 +485,13 @@ export default function App() {
     setFreq(newFreq);
     setShowDropdown(false);
     Haptics.selectionAsync();
-    
-    // Stop everything first
+
+    // Stop current timer; useEffect on freq handles restarting with the new value
     stopDirectionSoundTimer();
-    stopSilentSound();
-    
-    // Restart with new frequency if not Off
-    if (newFreq > 0) {
-      startDirectionSoundTimer();
+    if (newFreq === 0) {
+      stopSilentSound();
     }
   };
-
 
   const resetCalibration = () => {
     calibrationOffsetRef.current = 0;
@@ -554,18 +571,6 @@ export default function App() {
     return () => sub?.remove();
   }, []);
 
-  /*useEffect(() => {
-    const check = async () => {
-      try {
-        const p = await Battery.getPowerStateAsync();
-        setLowPower(p.lowPowerMode ?? false);
-      } catch {}
-    };
-    check();
-    const sub = Battery.addLowPowerModeListener(({ lowPowerMode }) => setLowPower(lowPowerMode));
-    return () => sub.remove();
-  }, []);*/
-
   // Restart timer when freq changes
   useEffect(() => {
     if (freq > 0) {
@@ -578,14 +583,16 @@ export default function App() {
     if (freq > 0) {
       startDirectionSoundTimer();
     }
-  }, [questionSoundEnabled, vibrationMode]);
+  }, [questionSoundEnabled]);
 
-  // Stop sounds when vibration mode toggles on
+  // Persist settings when they change
   useEffect(() => {
-    if (freq > 0) {
-      startDirectionSoundTimer();
+    if (!settingsLoaded.current) {
+      settingsLoaded.current = true;
+      return;
     }
-  }, [vibrationMode]);
+    saveSettings({ freq, questionSoundEnabled, vibrationMode, calibrationOffset });
+  }, [freq, questionSoundEnabled, vibrationMode, calibrationOffset]);
 
   // ----- RENDER --------------------------------------------------------------
   const advancedButtonText = IS_SMALL_SCREEN ? 'More ▼' : 'Advanced ▼';
@@ -828,8 +835,6 @@ export default function App() {
       <Text style={styles.status}>{status}</Text>
     </View>
 
-
-
     <View style={[styles.page, { height: screenHeight }]}>
       <View style={styles.advancedContainer}>
       {!IS_SMALL_SCREEN && (<Text style={styles.advancedTitle}>{advancedTitleText}</Text>)}
@@ -872,7 +877,6 @@ export default function App() {
                 Hold the phone in front of you, <Text style={styles.settingDescriptionWhite}>facing exactly forward</Text>; press Add Offset; you'll then have 5s to put the phone where you'll keep it. Don't rotate your body while doing that.
               </Text>
               {calibrationOffset > 0 && !calibrating && (
-                <Text></Text> && 
                 <Text style={styles.settingDescriptionBold}>
                   Offset: {calibrationOffset.toFixed(1)}°
                 </Text>
