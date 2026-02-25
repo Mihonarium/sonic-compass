@@ -1,0 +1,7 @@
+{
+  "name": "android-foreground-service",
+  "platforms": ["android"],
+  "android": {
+    "modules": ["expo.modules.foregroundservice.AndroidForegroundServiceModule"]
+  }
+}

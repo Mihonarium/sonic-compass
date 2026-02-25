@@ -33,7 +33,8 @@
     "react-native-easy-grid": "^0.2.2",
     "react-native-reanimated": "~3.17.4",
     "react-native-svg": "15.11.2",
-    "background-haptics": "./background-haptics"
+    "background-haptics": "./background-haptics",
+    "android-foreground-service": "./android-foreground-service"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0"

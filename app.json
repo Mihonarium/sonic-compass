@@ -39,7 +39,9 @@
       },
       "permissions": [
         "VIBRATE",
-        "FOREGROUND_SERVICE"
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+        "POST_NOTIFICATIONS"
       ]
     },
     "web": {
@@ -58,7 +60,8 @@
             "deploymentTarget": "15.1"
           }
         }
-      ]
+      ],
+      ["./android-foreground-service/plugin/withForegroundService"]
     ]
   }
 }

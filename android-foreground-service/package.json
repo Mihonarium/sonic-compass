@@ -1,0 +1,16 @@
+{
+  "name": "android-foreground-service",
+  "version": "1.0.0",
+  "author": "Mikhail Samin",
+  "license": "Proprietary",
+  "homepage": "https://contact.ms/compass/",
+  "summary": "Android foreground service for persistent background audio",
+  "description": "Expo native module that starts an Android foreground service to keep background audio alive",
+  "main": "src/index.js",
+  "types": "src/index.js",
+  "sideEffects": false,
+  "dependencies": {},
+  "peerDependencies": {
+    "expo": "*"
+  }
+}

@@ -14,6 +14,7 @@ import Svg, { Circle, Line, Text as SvgText, G, Defs, RadialGradient, Stop, Poly
 import { Buffer } from 'buffer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import BackgroundHaptics from "background-haptics";
+import AndroidForegroundService from 'android-foreground-service';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -143,6 +144,7 @@ export default function App() {
   const calibrationTimeoutRef = useRef(null);
   const vibrationModeRef = useRef(false);
   const isBackground = useRef(false);
+  const lastNotificationUpdate = useRef(0);
   const settingsLoaded = useRef(false);
 
   const triggerVibration = async () => {
@@ -206,6 +208,15 @@ export default function App() {
         shouldDuckAndroid: true,
         playThroughEarpieceAndroid: false,
       });
+
+      // Start Android foreground service to prevent OS from killing background audio
+      if (Platform.OS === 'android') {
+        try {
+          await AndroidForegroundService.startService('Sonic Compass', 'Running in background');
+        } catch (e) {
+          console.warn('Could not start foreground service:', e);
+        }
+      }
 
       // Create silent sound for background activity
       const silentURI = await writeWav('silent.wav', sineBuffer(0, 0.1));
@@ -407,6 +418,19 @@ export default function App() {
     while (diff < -180) diff += 360;
     
     rotRef.current += diff;
+
+    // Update notification with current heading (Android only, throttled to every 2s)
+    if (Platform.OS === 'android' && isBackground.current) {
+      const now = Date.now();
+      if (now - lastNotificationUpdate.current > 2000) {
+        lastNotificationUpdate.current = now;
+        AndroidForegroundService.updateNotification(
+          'Sonic Compass',
+          `Heading: ${Math.round(roundedHeading)}°`
+        ).catch(() => {});
+      }
+    }
+
     setHeading(roundedHeading);
 
     const northNow = roundedHeading <= 5 || roundedHeading >= 355;
@@ -555,6 +579,11 @@ export default function App() {
 
   useEffect(() => {
     return () => {
+      // Stop Android foreground service
+      if (Platform.OS === 'android') {
+        AndroidForegroundService.stopService().catch(() => {});
+      }
+
       stopCompass();
       stopDirectionSoundTimer();
       stopSilentSound();

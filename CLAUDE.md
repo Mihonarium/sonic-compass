@@ -18,6 +18,7 @@ React Native (Expo SDK 53) app that helps users develop an intuitive sense of ma
 | `app.json` | Expo config, iOS permissions, bundle ID |
 | `background-haptics/ios/BackgroundHapticsModule.swift` | Native haptics via AudioToolbox |
 | `background-haptics/src/index.js` | JS bridge for the native module |
+| `android-foreground-service/` | Expo native module (Kotlin/Android) that starts a foreground service with mediaPlayback type to keep background audio alive on Android. Includes a config plugin that injects service declaration and permissions into AndroidManifest.xml. |
 
 ## How It Works
 
@@ -57,10 +58,10 @@ eas submit --platform ios
 - Background haptics use AudioToolbox SystemSoundIDs (works reliably)
 
 ### Android
-- **Background audio is best-effort**: expo-av does not run a foreground service, so Android may kill audio after 1-3 minutes (Doze mode). A foreground service with notification would be needed for reliable background operation.
+- **Background audio** uses a foreground service with a persistent notification ("Sonic Compass is running") for reliable background audio. This prevents Android from killing the audio process under Doze mode.
 - Uses `InterruptionModeAndroid.DuckOthers` to briefly lower other apps' audio during compass cues
 - Background vibration uses `Vibration.vibrate()` directly (only works while process is alive)
-- `FOREGROUND_SERVICE` and `VIBRATE` permissions are declared
+- `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_MEDIA_PLAYBACK`, `POST_NOTIFICATIONS`, and `VIBRATE` permissions are declared
 
 ## General Notes
 
