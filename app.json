@@ -41,8 +41,14 @@
         "VIBRATE",
         "FOREGROUND_SERVICE",
         "FOREGROUND_SERVICE_MEDIA_PLAYBACK",
-        "POST_NOTIFICATIONS"
-      ]
+        "POST_NOTIFICATIONS",
+        "WAKE_LOCK"
+      ],
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO"
+      ],
+      "package": "ms.contact.compass",
+      "versionCode": 1
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -61,7 +67,9 @@
           }
         }
       ],
-      ["./android-foreground-service/plugin/withForegroundService"]
+      [
+        "./android-foreground-service/plugin/withForegroundService"
+      ]
     ]
   }
 }

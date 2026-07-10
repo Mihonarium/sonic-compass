@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet, View, Text, TouchableOpacity,
   AppState, Dimensions, ScrollView, Modal,
-  Vibration, Platform
+  Vibration, Platform, PermissionsAndroid
 } from 'react-native';
 import { Audio, InterruptionModeIOS, InterruptionModeAndroid } from 'expo-av';
 import CompassHeading from 'react-native-compass-heading';
@@ -50,6 +50,7 @@ const FREQ_OPTS = [
 ];
 const SAMPLE_RATE = 44100;
 const QUESTION_SOUND_DELAY = 1000; // 1 second before directional sound
+const CENTER_GAIN = Math.SQRT1_2; // constant-power pan gain at center (≈0.707)
 const SETTINGS_KEY = 'sonic_compass_settings';
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -58,16 +59,17 @@ const SETTINGS_KEY = 'sonic_compass_settings';
 const sineBuffer = (freq, durSec, panValue = 0) => {
   const frames = durSec * SAMPLE_RATE;
   const buf = new Float32Array(frames * 2); // Stereo
-  
+
+  // panValue === null: no baked panning (full gain both channels) — used on
+  // Android, where panning is applied at play time via SoundPool channel volumes
+  const leftGain = panValue === null ? 1 : Math.cos((panValue + 1) * Math.PI / 4);
+  const rightGain = panValue === null ? 1 : Math.sin((panValue + 1) * Math.PI / 4);
+
   for (let i = 0; i < frames; i++) {
     const t = i / SAMPLE_RATE;
     const fade = Math.min(1, t / 0.02, (durSec - t) / 0.02); // 20ms fade
     const sample = fade * Math.sin(2 * Math.PI * freq * t) * 0.3; // Lower volume
-    
-    // Apply stereo panning
-    const leftGain = Math.cos((panValue + 1) * Math.PI / 4);
-    const rightGain = Math.sin((panValue + 1) * Math.PI / 4);
-    
+
     buf[i * 2] = sample * leftGain;     // Left channel
     buf[i * 2 + 1] = sample * rightGain; // Right channel
   }
@@ -102,9 +104,18 @@ const makeWavBytesStereo = floatBuf => {
   return new Uint8Array(dv.buffer);
 };
 
-const writeWav = async (name, floatBuf) => {
-  const b64 = Buffer.from(makeWavBytesStereo(floatBuf)).toString('base64');
-  const uri = FileSystem.cacheDirectory + name;
+// Bump when sound generation changes (frequencies, durations, pan law) so
+// cached files from older versions are not reused
+const SOUND_CACHE_VERSION = 'v2';
+
+// makeFloatBuf is a thunk so sample generation is skipped entirely on cache hit
+const writeWav = async (name, makeFloatBuf) => {
+  const uri = `${FileSystem.cacheDirectory}${SOUND_CACHE_VERSION}_${name}`;
+  const info = await FileSystem.getInfoAsync(uri);
+  if (info.exists && info.size > 44) {
+    return uri;
+  }
+  const b64 = Buffer.from(makeWavBytesStereo(makeFloatBuf())).toString('base64');
   await FileSystem.writeAsStringAsync(uri, b64, { encoding: FileSystem.EncodingType.Base64 });
   return uri;
 };
@@ -124,6 +135,7 @@ export default function App() {
   const [calibrationOffset, setCalibrationOffset] = useState(0);
   const [calibrating, setCalibrating] = useState(false);
   const [vibrationMode, setVibrationMode] = useState(false);
+  const [notificationsDenied, setNotificationsDenied] = useState(false);
 
   // ----- REFS ----------------------------------------------------------------
   const rotRef = useRef(0);
@@ -146,6 +158,53 @@ export default function App() {
   const isBackground = useRef(false);
   const lastNotificationUpdate = useRef(0);
   const settingsLoaded = useRef(false);
+  // Android: SoundPool sample ids (see initAudio)
+  const androidSoundIds = useRef({ dir: null, north: null, question: null });
+  // Android: background-safe timer bookkeeping (see bgSetTimeout below)
+  const bgTimeoutCallbacks = useRef(new Map());
+  const bgTimeoutIdCounter = useRef(0);
+  const bgIntervalCallback = useRef(null);
+
+  // ----- BACKGROUND-SAFE TIMERS ----------------------------------------------
+  // On Android, RN's setTimeout/setInterval are driven by the Choreographer and
+  // freeze while the screen is off — exactly when this app must keep working.
+  // Route timing through native Handler-based timers in the foreground-service
+  // module instead. On iOS these fall through to normal JS timers.
+  const bgSetTimeout = (callback, delayMs) => {
+    if (Platform.OS !== 'android') return setTimeout(callback, delayMs);
+    const id = ++bgTimeoutIdCounter.current;
+    bgTimeoutCallbacks.current.set(id, callback);
+    AndroidForegroundService.setTimeoutNative(id, delayMs).catch(() => {});
+    return { bgTimeoutId: id };
+  };
+
+  const bgClearTimeout = (handle) => {
+    if (handle == null) return;
+    if (handle.bgTimeoutId != null) {
+      bgTimeoutCallbacks.current.delete(handle.bgTimeoutId);
+      AndroidForegroundService.clearTimeoutNative(handle.bgTimeoutId).catch(() => {});
+    } else {
+      clearTimeout(handle);
+    }
+  };
+
+  // Only one interval exists in the app (the direction-sound timer)
+  const bgSetInterval = (callback, intervalMs) => {
+    if (Platform.OS !== 'android') return setInterval(callback, intervalMs);
+    bgIntervalCallback.current = callback;
+    AndroidForegroundService.startInterval(intervalMs).catch(() => {});
+    return { bgInterval: true };
+  };
+
+  const bgClearInterval = (handle) => {
+    if (handle == null) return;
+    if (handle.bgInterval) {
+      bgIntervalCallback.current = null;
+      AndroidForegroundService.stopInterval().catch(() => {});
+    } else {
+      clearInterval(handle);
+    }
+  };
 
   const triggerVibration = async () => {
     try {
@@ -209,33 +268,56 @@ export default function App() {
         playThroughEarpieceAndroid: false,
       });
 
-      // Start Android foreground service to prevent OS from killing background audio
       if (Platform.OS === 'android') {
         try {
+          // Android 13+ requires runtime permission for the service notification to be visible
+          if (Platform.Version >= 33) {
+            const result = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
+            if (result !== PermissionsAndroid.RESULTS.GRANTED) {
+              setNotificationsDenied(true);
+            }
+          }
+          // Start foreground service to prevent OS from killing background audio
           await AndroidForegroundService.startService('Sonic Compass', 'Running in background');
         } catch (e) {
           console.warn('Could not start foreground service:', e);
         }
+
+        // Android plays cues through a native SoundPool, which never requests
+        // audio focus — cues mix on top of other apps' audio instead of
+        // ducking it. Panning is applied per play via channel volumes, so one
+        // unpanned sample replaces the 121 pre-panned files, and no silent
+        // keepalive loop is needed (the foreground service + wakelock keep
+        // the process alive).
+        const dirURI = await writeWav('dir_center.wav', () => sineBuffer(440, 0.25, null));
+        const northURI = await writeWav('north_center.wav', () => sineBuffer(880, 0.3, null));
+        const questionURI = await writeWav('question_center.wav', () => sineBuffer(660, 0.2, null));
+        androidSoundIds.current.dir = await AndroidForegroundService.loadSound(dirURI);
+        androidSoundIds.current.north = await AndroidForegroundService.loadSound(northURI);
+        androidSoundIds.current.question = await AndroidForegroundService.loadSound(questionURI);
+
+        setStatus('Audio initialized');
+        return;
       }
 
       // Create silent sound for background activity
-      const silentURI = await writeWav('silent.wav', sineBuffer(0, 0.1));
+      const silentURI = await writeWav('silent.wav', () => sineBuffer(0, 0.1));
       dirSounds.current.silent = (await Audio.Sound.createAsync(
-        { uri: silentURI }, 
+        { uri: silentURI },
         { shouldPlay: false, volume: 0.01, isLooping: true }
       )).sound;
 
       // Create north sound (celebratory tone)
-      const northURI = await writeWav('north.wav', sineBuffer(880, 0.3));
+      const northURI = await writeWav('north.wav', () => sineBuffer(880, 0.3));
       northSound.current = (await Audio.Sound.createAsync(
-        { uri: northURI }, 
+        { uri: northURI },
         { shouldPlay: false, volume: 0.8 }
       )).sound;
 
       // Create question sound (neutral tone, centered)
-      const questionURI = await writeWav('question.wav', sineBuffer(660, 0.2, 0));
+      const questionURI = await writeWav('question.wav', () => sineBuffer(660, 0.2, 0));
       questionSound.current = (await Audio.Sound.createAsync(
-        { uri: questionURI }, 
+        { uri: questionURI },
         { shouldPlay: false, volume: 0.5 }
       )).sound;
 
@@ -244,12 +326,12 @@ export default function App() {
       for (let i = 0; i <= 120; i++) {
         panValues.push(-1.0 + (i * (2 / 120)));
       }
-      
+
       for (let i = 0; i < panValues.length; i++) {
         const panValue = panValues[i];
-        const dirURI = await writeWav(`dir_${i}.wav`, sineBuffer(440, 0.25, panValue));
+        const dirURI = await writeWav(`dir_${i}.wav`, () => sineBuffer(440, 0.25, panValue));
         dirSounds.current[i] = (await Audio.Sound.createAsync(
-          { uri: dirURI }, 
+          { uri: dirURI },
           { shouldPlay: false, volume: 0.5 }
         )).sound;
       }
@@ -269,10 +351,17 @@ export default function App() {
         await startSilentSound();
       } else if (!northSoundPlaying.current) {
         northSoundPlaying.current = true;
-        setTimeout(() => {
+        bgSetTimeout(() => {
           northSoundPlaying.current = false;
         }, 300);
-        await northSound.current?.replayAsync();
+        if (Platform.OS === 'android') {
+          const id = androidSoundIds.current.north;
+          if (id != null) {
+            await AndroidForegroundService.playSound(id, 0.8 * CENTER_GAIN, 0.8 * CENTER_GAIN);
+          }
+        } else {
+          await northSound.current?.replayAsync();
+        }
       }
     } catch (error) {
       console.error('North sound error:', error);
@@ -282,7 +371,14 @@ export default function App() {
 
   const playQuestionSound = async () => {
     try {
-      await questionSound.current?.replayAsync();
+      if (Platform.OS === 'android') {
+        const id = androidSoundIds.current.question;
+        if (id != null) {
+          await AndroidForegroundService.playSound(id, 0.5 * CENTER_GAIN, 0.5 * CENTER_GAIN);
+        }
+      } else {
+        await questionSound.current?.replayAsync();
+      }
     } catch (error) {
       console.error('Question sound error:', error);
     }
@@ -294,11 +390,23 @@ export default function App() {
       const hdg = currentHeading.current;
       const panValue = Math.sin(hdg * Math.PI / 180);
       const correctedPan = -panValue;
-      
+
+      if (Platform.OS === 'android') {
+        // Continuous panning via SoundPool channel volumes — same
+        // constant-power law that sineBuffer bakes into the iOS files
+        const id = androidSoundIds.current.dir;
+        if (id != null) {
+          const leftGain = Math.cos((correctedPan + 1) * Math.PI / 4);
+          const rightGain = Math.sin((correctedPan + 1) * Math.PI / 4);
+          await AndroidForegroundService.playSound(id, 0.5 * leftGain, 0.5 * rightGain);
+        }
+        return;
+      }
+
       // Map pan value (-1 to 1) to sound index (0 to 120) for 121 different positions
       const index = Math.round((correctedPan + 1) * 60);
       const soundIndex = Math.max(0, Math.min(120, index));
-      
+
       const sound = dirSounds.current[soundIndex];
       if (sound) {
         const status = await sound.getStatusAsync();
@@ -313,6 +421,9 @@ export default function App() {
   };
 
   const startSilentSound = async () => {
+    // Android has no keepalive loop — the foreground service keeps the
+    // process alive, and holding no audio focus means no ducking of other apps
+    if (Platform.OS === 'android') return;
     try {
       const silentSound = dirSounds.current.silent;
       if (silentSound) {
@@ -328,6 +439,7 @@ export default function App() {
   };
 
   const stopSilentSound = async () => {
+    if (Platform.OS === 'android') return;
     try {
       const silentSound = dirSounds.current.silent;
       if (silentSound) {
@@ -347,13 +459,13 @@ export default function App() {
   const startDirectionSoundTimer = () => {
     // Clear any existing timer
     if (directionSoundInterval.current) {
-      clearInterval(directionSoundInterval.current);
+      bgClearInterval(directionSoundInterval.current);
       directionSoundInterval.current = null;
     }
-    
+
     // Clear any pending question sound timeout
     if (questionTimeoutRef.current) {
-      clearTimeout(questionTimeoutRef.current);
+      bgClearTimeout(questionTimeoutRef.current);
       questionTimeoutRef.current = null;
     }
     
@@ -371,7 +483,7 @@ export default function App() {
             playQuestionSound();
             
             // Schedule directional sound after delay
-            questionTimeoutRef.current = setTimeout(() => {
+            questionTimeoutRef.current = bgSetTimeout(() => {
               playDir(); // Will get current heading at time of playing
               lastDirectionalSoundTime.current = Date.now();
               setLastDir(Date.now());
@@ -389,17 +501,17 @@ export default function App() {
       playDirectionalSequence();
       
       // Then set interval for subsequent sounds
-      directionSoundInterval.current = setInterval(playDirectionalSequence, freq);
+      directionSoundInterval.current = bgSetInterval(playDirectionalSequence, freq);
     }
   };
 
   const stopDirectionSoundTimer = () => {
     if (directionSoundInterval.current) {
-      clearInterval(directionSoundInterval.current);
+      bgClearInterval(directionSoundInterval.current);
       directionSoundInterval.current = null;
     }
     if (questionTimeoutRef.current) {
-      clearTimeout(questionTimeoutRef.current);
+      bgClearTimeout(questionTimeoutRef.current);
       questionTimeoutRef.current = null;
     }
   };
@@ -431,7 +543,11 @@ export default function App() {
       }
     }
 
-    setHeading(roundedHeading);
+    // Skip UI re-renders while backgrounded — sensor events arrive ~50×/s and
+    // rendering an invisible UI wastes battery in the app's core use case
+    if (!isBackground.current) {
+      setHeading(roundedHeading);
+    }
 
     const northNow = roundedHeading <= 5 || roundedHeading >= 355;
     
@@ -540,9 +656,10 @@ export default function App() {
     Haptics.selectionAsync();
     calibrationStartRef.current = rawHeadingRef.current;
     if (calibrationTimeoutRef.current) {
-      clearTimeout(calibrationTimeoutRef.current);
+      bgClearTimeout(calibrationTimeoutRef.current);
     }
-    calibrationTimeoutRef.current = setTimeout(() => {
+    // Background-safe: the phone is in a pocket (screen off) when this fires
+    calibrationTimeoutRef.current = bgSetTimeout(() => {
       const end = rawHeadingRef.current;
       let diff = end - calibrationStartRef.current;
       diff = (diff + 360) % 360;
@@ -592,8 +709,25 @@ export default function App() {
       questionSound.current?.unloadAsync();
       Object.values(dirSounds.current).forEach(sound => sound?.unloadAsync());
       if (calibrationTimeoutRef.current) {
-        clearTimeout(calibrationTimeoutRef.current);
+        bgClearTimeout(calibrationTimeoutRef.current);
       }
+    };
+  }, []);
+
+  // Receive native timer events (Android background-safe timers)
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    const tickSub = AndroidForegroundService.addTickListener(() => {
+      bgIntervalCallback.current?.();
+    });
+    const timeoutSub = AndroidForegroundService.addTimeoutListener(({ id }) => {
+      const callback = bgTimeoutCallbacks.current.get(id);
+      bgTimeoutCallbacks.current.delete(id);
+      callback?.();
+    });
+    return () => {
+      tickSub.remove();
+      timeoutSub.remove();
     };
   }, []);
 
@@ -871,6 +1005,11 @@ export default function App() {
       <View style={styles.footerSpacer} />
 
       <Text style={styles.status}>{status}</Text>
+      {notificationsDenied && (
+        <Text style={styles.notifHint}>
+          Notifications are off — enable them for Sonic Compass in Android Settings to see when it runs in the background.
+        </Text>
+      )}
     </View>
 
     <View style={[styles.page, { height: screenHeight }]}>
@@ -1236,6 +1375,15 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: 'rgba(255,255,255,0.7)',
     fontSize: fontScale(14),
+  },
+  notifHint: {
+    position: 'absolute',
+    bottom: verticalScale(5),
+    width: '100%',
+    textAlign: 'center',
+    color: 'rgba(255,200,100,0.7)',
+    fontSize: fontScale(11),
+    paddingHorizontal: scale(20),
   },
   footerSpacer: {
     height: verticalScale(40) + fontScale(14) + verticalScale(15),

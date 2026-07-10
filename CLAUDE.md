@@ -58,10 +58,17 @@ eas submit --platform ios
 - Background haptics use AudioToolbox SystemSoundIDs (works reliably)
 
 ### Android
-- **Background audio** uses a foreground service with a persistent notification ("Sonic Compass is running") for reliable background audio. This prevents Android from killing the audio process under Doze mode.
-- Uses `InterruptionModeAndroid.DuckOthers` to briefly lower other apps' audio during compass cues
+- **Background audio** uses a foreground service with a persistent notification ("Sonic Compass is running"). The service holds a partial wakelock so sensors and timers keep running with the screen off. It returns `START_NOT_STICKY` (a restarted service without JS would be a zombie), stops everything in `onTaskRemoved` (swipe-away = quit, matching iOS), and its notification opens the app on tap.
+- **JS timers freeze when the screen is off**: React Native's `setTimeout`/`setInterval` are Choreographer (vsync) driven on Android and stop firing when the display sleeps — even with a foreground service. All timing that must survive screen-off (direction-sound interval, question-cue delay, calibration timeout, north debounce) goes through the `bgSetTimeout`/`bgSetInterval` helpers in App.js, which call native `Handler`-based timers in `android-foreground-service`. UI-only timeouts can stay as plain JS timers.
+- **All Android playback goes through a native SoundPool** (in `android-foreground-service`), NOT expo-av. SoundPool never requests audio focus, so cues mix on top of other apps' audio (the Android equivalent of iOS `MixWithOthers`) instead of ducking it. Panning is continuous, applied per play via left/right channel volumes using the same constant-power law `sineBuffer` bakes into the iOS files. Only 3 unpanned samples are loaded (dir/north/question); there is no silent keepalive loop on Android — the foreground service keeps the process alive.
+- `setHeading` is skipped while backgrounded (sensor events arrive ~50×/s; rendering an invisible UI wastes battery)
 - Background vibration uses `Vibration.vibrate()` directly (only works while process is alive)
-- `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_MEDIA_PLAYBACK`, `POST_NOTIFICATIONS`, and `VIBRATE` permissions are declared
+- `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_MEDIA_PLAYBACK`, `POST_NOTIFICATIONS`, `WAKE_LOCK`, and `VIBRATE` permissions are declared; `RECORD_AUDIO` (pulled in by expo-av) is blocked via `blockedPermissions`
+- `POST_NOTIFICATIONS` is requested at runtime (Android 13+) before starting the foreground service; if denied, a hint to enable it in Settings is shown under the status line
+- The generated `android/`/`ios/` directories are gitignored (CNG); regenerate with `npx expo prebuild`
+
+### Audio file caching
+- `writeWav(name, makeFloatBuf)` takes a **thunk** and caches generated WAVs in `FileSystem.cacheDirectory`, keyed by `SOUND_CACHE_VERSION` — bump that constant whenever sound generation changes (frequencies, durations, pan law) or stale cached files will be reused
 
 ## General Notes
 
