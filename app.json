@@ -2,7 +2,7 @@
   "expo": {
     "name": "Sonic Compass",
     "slug": "background-compass",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -48,7 +48,7 @@
         "android.permission.RECORD_AUDIO"
       ],
       "package": "ms.contact.compass",
-      "versionCode": 2
+      "versionCode": 8
     },
     "web": {
       "favicon": "./assets/favicon.png"
