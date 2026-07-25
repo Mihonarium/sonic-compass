@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet, View, Text, TouchableOpacity,
   AppState, Dimensions, ScrollView, Modal,
-  Vibration, Platform, PermissionsAndroid
+  Vibration, Platform, PermissionsAndroid, StatusBar
 } from 'react-native';
 import { Audio, InterruptionModeIOS, InterruptionModeAndroid } from 'expo-av';
 import CompassHeading from 'react-native-compass-heading';
@@ -33,6 +33,12 @@ const fontScale = (size, factor = 0.5) => size + (scale(size) - size) * factor;
 
 // Small screen detection for adaptive UI changes
 const IS_SMALL_SCREEN = screenHeight < 750;
+
+// The design margins assume iOS, where the app draws behind the status bar /
+// notch. Android places the app below the status bar, so the same top margin
+// would shift the whole layout down by the bar's height — subtract it there.
+// Zero on iOS: no visual change where the design already works.
+const ANDROID_STATUS_BAR_OFFSET = Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 0;
 
 ////////////////////////////////////////////////////////////////////////////////
 // 1. STATIC CONFIGURATION //////////////////////////////////////////////////////
@@ -1160,7 +1166,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: IS_SMALL_SCREEN ? verticalScale(30) : verticalScale(60),
+    marginTop: Math.max(
+      verticalScale(8),
+      (IS_SMALL_SCREEN ? verticalScale(30) : verticalScale(60)) - ANDROID_STATUS_BAR_OFFSET
+    ),
     marginBottom: verticalScale(20),
     minHeight: IS_SMALL_SCREEN ? 0 : fontScale(24) * 1.2, // Reserve space to prevent jump
   },
