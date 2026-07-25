@@ -549,9 +549,10 @@ export default function App() {
       }
     }
 
-    // Skip UI re-renders while backgrounded — sensor events arrive ~50×/s and
-    // rendering an invisible UI wastes battery in the app's core use case
-    if (!isBackground.current) {
+    // Android: skip UI re-renders while backgrounded — sensor events arrive
+    // ~50×/s and rendering an invisible UI wastes battery in the app's core
+    // use case. iOS keeps its original behavior.
+    if (Platform.OS !== 'android' || !isBackground.current) {
       setHeading(roundedHeading);
     }
 
