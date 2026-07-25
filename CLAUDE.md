@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-React Native (Expo SDK 53) app that helps users develop an intuitive sense of magnetic North through spatial audio cues and haptic feedback. iOS (App Store: `ms.contact.compass`) and Android.
+React Native (Expo SDK 54, RN 0.81) app that helps users develop an intuitive sense of magnetic North through spatial audio cues and haptic feedback. iOS (App Store: `ms.contact.compass`) and Android (Play: `ms.contact.compass`, targets API 36).
 
 ## Architecture
 
@@ -65,7 +65,13 @@ eas submit --platform ios
 - Background vibration uses `Vibration.vibrate()` directly (only works while process is alive)
 - `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_MEDIA_PLAYBACK`, `POST_NOTIFICATIONS`, `WAKE_LOCK`, and `VIBRATE` permissions are declared; `RECORD_AUDIO` (pulled in by expo-av) is blocked via `blockedPermissions`
 - `POST_NOTIFICATIONS` is requested at runtime (Android 13+) before starting the foreground service; if denied, a hint to enable it in Settings is shown under the status line
+- **Edge-to-edge is mandatory** (target API 36): Android draws behind the status/nav bars like iOS, so the iOS design margins apply as-is. `ANDROID_TOP_INSET`/`ANDROID_BOTTOM_INSET` (from `initialWindowMetrics`, both 0 on iOS) provide a floor for the header margin and bottom nav-bar clearance. Do NOT subtract the status bar height from margins — that was only correct pre-edge-to-edge.
 - The generated `android/`/`ios/` directories are gitignored (CNG); regenerate with `npx expo prebuild`
+
+### SDK upgrade notes
+- SDK 54 keeps `expo-av` (16.0.8, deprecated) — iOS audio is unchanged. SDK 55+ removes it; upgrading past 54 requires migrating iOS playback to `expo-audio`.
+- `expo-file-system` is imported from `expo-file-system/legacy` (SDK 54 changed the default API).
+- Google Play requires target API within one year of the latest Android release — plan SDK upgrades accordingly.
 
 ### Audio file caching
 - `writeWav(name, makeFloatBuf)` takes a **thunk** and caches generated WAVs in `FileSystem.cacheDirectory`, keyed by `SOUND_CACHE_VERSION` — bump that constant whenever sound generation changes (frequencies, durations, pan law) or stale cached files will be reused
