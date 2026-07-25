@@ -783,7 +783,10 @@ export default function App() {
   const gridContainerHeight = styles.gridContainer.marginTop + styles.gridItem.marginBottom + (styles.gridItem.paddingVertical * 2) + fontScale(14) + fontScale(16) + styles.gridValue.marginTop;
   const gridInfoHeight = !IS_SMALL_SCREEN ? (styles.gridInfo.marginTop + (fontScale(12) * 1.4 * 7)) : 0;
   const advancedToggleHeight = styles.advancedToggle.marginTop + (styles.advancedToggle.paddingVertical * 2) + fontScale(16);
-  const footerSpacerHeight = styles.footerSpacer.height;
+  // Reserved footer area: the flexible spacer (at its minimum this is the gap
+  // the sizing must guarantee) plus the status line — keeps compass sizing
+  // identical to the old fixed-height spacer
+  const footerSpacerHeight = verticalScale(40) + fontScale(14) + verticalScale(15);
   const compassMargin = styles.compassWrap.marginVertical * 2;
 
   const nonCompassSpace = pageVerticalPadding + headerHeight + readoutHeight + gridContainerHeight + gridInfoHeight + advancedToggleHeight + footerSpacerHeight + compassMargin + 0.6;
@@ -1369,16 +1372,13 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   status: {
-    position: 'absolute',
-    bottom: verticalScale(25),
     width: '100%',
     textAlign: 'center',
     color: 'rgba(255,255,255,0.7)',
     fontSize: fontScale(14),
+    marginBottom: verticalScale(5),
   },
   notifHint: {
-    position: 'absolute',
-    bottom: verticalScale(5),
     width: '100%',
     textAlign: 'center',
     color: 'rgba(255,200,100,0.7)',
@@ -1386,6 +1386,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: scale(20),
   },
   footerSpacer: {
-    height: verticalScale(40) + fontScale(14) + verticalScale(15),
+    // Flexible: pushes the status to the page bottom when there is room, and
+    // collapses to a small gap on screens where the content runs long, so the
+    // status never overlaps the Advanced toggle above it
+    flexGrow: 1,
+    minHeight: verticalScale(12),
   },
 });
