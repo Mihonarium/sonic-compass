@@ -69,7 +69,8 @@
       ],
       [
         "./android-foreground-service/plugin/withForegroundService"
-      ]
+      ],
+      "expo-asset"
     ]
   }
 }
