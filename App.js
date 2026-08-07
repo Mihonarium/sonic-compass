@@ -231,7 +231,7 @@ const OnboardingCarousel = ({ onDone }) => {
         <View style={styles.onbSlide}>
           <View style={styles.onbArt}>
             <Image source={ONB_IMG.walker} style={styles.onbWalker} resizeMode="contain" />
-            <NorthBlob size={scale(96)} style={styles.onbBlobHook} />
+            <NorthBlob size={scale(130)} style={styles.onbBlobHook} />
           </View>
           <Text style={styles.onbKicker}>SONIC COMPASS</Text>
           <Text style={styles.onbTitle}>Acquire a new sense.</Text>
@@ -258,8 +258,8 @@ const OnboardingCarousel = ({ onDone }) => {
           <View style={styles.onbPush} />
           <Text style={styles.onbTitle}>First: immerse</Text>
           <View style={styles.onbSteps}>
-            <Text style={styles.onbStepText}>Set the frequency to <Text style={styles.onbAccent}>1s</Text> and just walk.</Text>
-            <Text style={styles.onbStepText}>Do it for 30 minutes to a couple of hours — over a few days is fine. Lower the frequency over time, as you become used to the feeling.</Text>
+            <Text style={styles.onbPara}>Set the frequency to <Text style={styles.onbAccent}>1s</Text> and just walk.</Text>
+            <Text style={styles.onbPara}>Do it for 30 minutes to a couple of hours — over a few days is fine. Lower the frequency over time, as you become used to the feeling.</Text>
           </View>
         </View>
 
@@ -278,6 +278,7 @@ const OnboardingCarousel = ({ onDone }) => {
 
         {/* 5 — potential issues */}
         <View style={styles.onbSlide}>
+          <ScrollView showsVerticalScrollIndicator={false} nestedScrollEnabled={true}>
           <Text style={styles.onbTitle}>Potential issues</Text>
           <View style={styles.onbFaq}>
             <Text style={styles.onbFaqText}><Text style={styles.onbFaqQ}>Compass wrong?{'\n'}</Text>Search for compass-calibration instructions for your phone, and check for MagSafe or other metal/magnetic accessories.</Text>
@@ -285,13 +286,14 @@ const OnboardingCarousel = ({ onDone }) => {
             <Text style={styles.onbFaqText}><Text style={styles.onbFaqQ}>Sound from a wrong direction?{'\n'}</Text>If you hold the phone straight, the sound comes from the direction of North. Otherwise, you hear the sounds as if you were facing the direction the phone is facing. If you want to keep the phone in a pocket, add an offset in the Advanced settings — don’t forget to reset the offset when you take the phone out.</Text>
             <Text style={styles.onbFaqText}><Text style={styles.onbFaqQ}>Walking around?{'\n'}</Text>Please don’t look directly at the sun, and use SPF 50+ sunscreen.</Text>
           </View>
+          </ScrollView>
         </View>
 
         {/* 6 — send-off */}
         <View style={styles.onbSlide}>
           <View style={styles.onbArt}>
             <Image source={ONB_IMG.walker} style={styles.onbWalkerSmall} resizeMode="contain" />
-            <NorthBlob size={scale(88)} style={styles.onbBlobEnd} />
+            <NorthBlob size={scale(120)} style={styles.onbBlobEnd} />
           </View>
           <Text style={styles.onbTitle}>That’s it.</Text>
           <Text style={styles.onbBody}>The app keeps working in the background and doesn’t interrupt music. To use it in a pocket, see Advanced settings.</Text>
@@ -1651,16 +1653,18 @@ const styles = StyleSheet.create({
   },
 
   // ----- ONBOARDING CAROUSEL -------------------------------------------------
+  // Sizes are in the app's 428pt design space (the preview mockups were 300px
+  // frames — everything here is the preview value x1.43)
   onbRoot: {
     flex: 1,
   },
   onbSlide: {
     width: screenWidth,
     flex: 1,
-    paddingHorizontal: scale(26),
-    paddingTop: SAFE_TOP + verticalScale(40),
+    paddingHorizontal: scale(36),
+    paddingTop: SAFE_TOP + verticalScale(50),
     // clears the absolutely-positioned footer (button + dots) on every screen
-    paddingBottom: SAFE_BOTTOM + verticalScale(104),
+    paddingBottom: SAFE_BOTTOM + verticalScale(150),
   },
   onbSceneImg: {
     width: '100%',
@@ -1673,14 +1677,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   onbWalker: {
-    width: '78%',
+    width: '84%',
     height: '94%',
-    maxHeight: verticalScale(330),
+    maxHeight: verticalScale(440),
   },
   onbWalkerSmall: {
-    width: '64%',
+    width: '68%',
     height: '86%',
-    maxHeight: verticalScale(270),
+    maxHeight: verticalScale(360),
   },
   onbBlobHook: {
     position: 'absolute',
@@ -1697,58 +1701,65 @@ const styles = StyleSheet.create({
   },
   onbKicker: {
     color: 'rgba(255,255,255,0.55)',
-    fontSize: fontScale(11),
-    letterSpacing: 2.4,
-    marginBottom: verticalScale(8),
+    fontSize: fontScale(16),
+    letterSpacing: 3.4,
+    marginBottom: verticalScale(11),
   },
   onbTitle: {
     color: '#fff',
-    fontSize: fontScale(24),
+    fontSize: fontScale(34),
     fontWeight: '700',
-    lineHeight: fontScale(24) * 1.2,
+    lineHeight: fontScale(34) * 1.2,
   },
   onbBody: {
     color: 'rgba(255,255,255,0.9)',
-    fontSize: fontScale(14),
-    lineHeight: fontScale(14) * 1.55,
-    marginTop: verticalScale(8),
+    fontSize: fontScale(20),
+    lineHeight: fontScale(20) * 1.5,
+    marginTop: verticalScale(11),
   },
   onbFine: {
     color: 'rgba(255,255,255,0.72)',
-    fontSize: fontScale(12.5),
-    marginTop: verticalScale(10),
+    fontSize: fontScale(18),
+    marginTop: verticalScale(14),
   },
   onbSteps: {
-    marginTop: verticalScale(12),
-    gap: verticalScale(10),
+    marginTop: verticalScale(17),
+    gap: verticalScale(14),
   },
   onbStep: {
     flexDirection: 'row',
-    gap: scale(10),
+    gap: scale(14),
     alignItems: 'flex-start',
   },
   onbBadge: {
-    width: scale(36),
-    height: scale(24),
-    borderRadius: scale(12),
+    width: scale(51),
+    height: scale(34),
+    borderRadius: scale(17),
     backgroundColor: 'rgba(59,130,246,0.3)',
     borderWidth: 1,
     borderColor: 'rgba(124,196,255,0.55)',
     alignItems: 'center',
     justifyContent: 'center',
     // center the badge on the first line of the step text
-    marginTop: (fontScale(13.5) * 1.5 - scale(24)) / 2,
+    marginTop: (fontScale(19) * 1.5 - scale(34)) / 2,
   },
   onbBadgeText: {
     color: '#fff',
-    fontSize: fontScale(11.5),
+    fontSize: fontScale(16),
     fontWeight: '700',
   },
   onbStepText: {
     flex: 1,
     color: 'rgba(255,255,255,0.92)',
-    fontSize: fontScale(13.5),
-    lineHeight: fontScale(13.5) * 1.5,
+    fontSize: fontScale(19),
+    lineHeight: fontScale(19) * 1.5,
+  },
+  onbPara: {
+    // like onbStepText but for bare paragraphs in a column (flex:1 would
+    // collapse a Text to zero height outside a row)
+    color: 'rgba(255,255,255,0.92)',
+    fontSize: fontScale(19),
+    lineHeight: fontScale(19) * 1.5,
   },
   onbBold: {
     color: '#fff',
@@ -1760,17 +1771,18 @@ const styles = StyleSheet.create({
   },
   onbTag: {
     color: '#9ec8f5',
-    fontSize: fontScale(13),
-    marginTop: verticalScale(12),
+    fontSize: fontScale(19),
+    lineHeight: fontScale(19) * 1.4,
+    marginTop: verticalScale(17),
   },
   onbFaq: {
-    marginTop: verticalScale(12),
-    gap: verticalScale(11),
+    marginTop: verticalScale(17),
+    gap: verticalScale(16),
   },
   onbFaqText: {
     color: 'rgba(255,255,255,0.88)',
-    fontSize: fontScale(12.5),
-    lineHeight: fontScale(12.5) * 1.5,
+    fontSize: fontScale(16),
+    lineHeight: fontScale(16) * 1.5,
   },
   onbFaqQ: {
     color: '#fff',
@@ -1778,10 +1790,10 @@ const styles = StyleSheet.create({
   },
   onbGhost: {
     color: 'rgba(255,255,255,0.65)',
-    fontSize: fontScale(12.5),
-    lineHeight: fontScale(12.5) * 1.5,
+    fontSize: fontScale(18),
+    lineHeight: fontScale(18) * 1.5,
     textAlign: 'center',
-    marginTop: verticalScale(14),
+    marginTop: verticalScale(20),
   },
   onbLink: {
     color: '#9ec8f5',
@@ -1789,42 +1801,42 @@ const styles = StyleSheet.create({
   },
   onbSkip: {
     position: 'absolute',
-    top: SAFE_TOP + verticalScale(8),
-    right: scale(18),
+    top: SAFE_TOP + verticalScale(10),
+    right: scale(26),
     zIndex: 5,
-    padding: scale(4),
+    padding: scale(6),
   },
   onbSkipText: {
     color: 'rgba(255,255,255,0.6)',
-    fontSize: fontScale(13),
+    fontSize: fontScale(19),
   },
   onbFooter: {
     position: 'absolute',
-    left: scale(24),
-    right: scale(24),
-    bottom: SAFE_BOTTOM + verticalScale(10),
+    left: scale(34),
+    right: scale(34),
+    bottom: SAFE_BOTTOM + verticalScale(16),
   },
   onbBtn: {
     backgroundColor: '#3B82F6',
-    borderRadius: scale(14),
-    paddingVertical: verticalScale(13),
+    borderRadius: scale(20),
+    paddingVertical: verticalScale(18),
     alignItems: 'center',
   },
   onbBtnText: {
     color: '#fff',
-    fontSize: fontScale(15),
+    fontSize: fontScale(21),
     fontWeight: '600',
   },
   onbDots: {
     flexDirection: 'row',
-    gap: scale(6),
+    gap: scale(9),
     justifyContent: 'center',
-    paddingTop: verticalScale(10),
+    paddingTop: verticalScale(14),
   },
   onbDot: {
-    width: scale(6),
-    height: scale(6),
-    borderRadius: scale(3),
+    width: scale(9),
+    height: scale(9),
+    borderRadius: scale(5),
     backgroundColor: 'rgba(255,255,255,0.28)',
   },
   onbDotOn: {
