@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-React Native (Expo SDK 53) app that helps users develop an intuitive sense of magnetic North through spatial audio cues and haptic feedback. iOS (App Store: `ms.contact.compass`) and Android.
+React Native (Expo SDK 54, RN 0.81) app that helps users develop an intuitive sense of magnetic North through spatial audio cues and haptic feedback. iOS (App Store: `ms.contact.compass`) and Android (Play: `ms.contact.compass`, targets API 36).
 
 ## Architecture
 
@@ -65,16 +65,22 @@ eas submit --platform ios
 - Background vibration uses `Vibration.vibrate()` directly (only works while process is alive)
 - `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_MEDIA_PLAYBACK`, `POST_NOTIFICATIONS`, `WAKE_LOCK`, and `VIBRATE` permissions are declared; `RECORD_AUDIO` (pulled in by expo-av) is blocked via `blockedPermissions`
 - `POST_NOTIFICATIONS` is requested at runtime (Android 13+) before starting the foreground service; if denied, a hint to enable it in Settings is shown under the status line
+- **Edge-to-edge is mandatory** (target API 36): Android draws behind the status/nav bars like iOS, so the iOS design margins apply as-is. `ANDROID_TOP_INSET`/`ANDROID_BOTTOM_INSET` (from `initialWindowMetrics`, both 0 on iOS) provide a floor for the header margin and bottom nav-bar clearance. Do NOT subtract the status bar height from margins — that was only correct pre-edge-to-edge.
 - The generated `android/`/`ios/` directories are gitignored (CNG); regenerate with `npx expo prebuild`
-
-### Audio file caching
-- `writeWav(name, makeFloatBuf)` takes a **thunk** and caches generated WAVs in `FileSystem.cacheDirectory`, keyed by `SOUND_CACHE_VERSION` — bump that constant whenever sound generation changes (frequencies, durations, pan law) or stale cached files will be reused
 
 ### Google-Play-Services-free builds
 - `expo-dev-client` is deliberately NOT in package.json (PR #53): its Android dev-launcher is not debug-gated and pulls GMS + MLKit into release builds. The default dependency tree is GMS-free so source builds work on de-Googled devices.
 - **Development builds: use `npm run dev:build` (optionally `npm run dev:build ios`)**, NOT `eas build --profile development` directly — eas-cli refuses a dev-profile build without expo-dev-client installed locally. The wrapper (`scripts/eas-dev-build.sh`) temporarily installs it, submits (the project uploads with it, so the EAS builder gets it too), then restores package.json/lockfile/node_modules even on failure.
 - For a local dev-launcher build, run `npx expo install expo-dev-client` first and don't commit the package.json change. Plain `npx expo run:android` debug builds work without it (Metro still connects; you just lose the launcher UI).
 - `expo-location` was removed as unused; don't re-add location deps without checking the manifest for GMS fallout.
+
+### SDK upgrade notes
+- SDK 54 keeps `expo-av` (16.0.8, deprecated) — iOS audio is unchanged. SDK 55+ removes it; upgrading past 54 requires migrating iOS playback to `expo-audio`.
+- `expo-file-system` is imported from `expo-file-system/legacy` (SDK 54 changed the default API).
+- Google Play requires target API within one year of the latest Android release — plan SDK upgrades accordingly.
+
+### Audio file caching
+- `writeWav(name, makeFloatBuf)` takes a **thunk** and caches generated WAVs in `FileSystem.cacheDirectory`, keyed by `SOUND_CACHE_VERSION` — bump that constant whenever sound generation changes (frequencies, durations, pan law) or stale cached files will be reused
 
 ## General Notes
 

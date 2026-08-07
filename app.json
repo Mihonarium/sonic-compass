@@ -48,7 +48,8 @@
         "android.permission.RECORD_AUDIO"
       ],
       "package": "ms.contact.compass",
-      "versionCode": 9
+      "versionCode": 11,
+      "edgeToEdgeEnabled": true
     },
     "web": {
       "favicon": "./assets/favicon.png"

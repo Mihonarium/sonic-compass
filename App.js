@@ -7,7 +7,9 @@ import {
 import { Audio, InterruptionModeIOS, InterruptionModeAndroid } from 'expo-av';
 import CompassHeading from 'react-native-compass-heading';
 import * as Haptics from 'expo-haptics';
-import * as FileSystem from 'expo-file-system';
+// SDK 54 introduced a new expo-file-system API; the legacy import keeps the
+// writeAsStringAsync/getInfoAsync/cacheDirectory API this app uses
+import * as FileSystem from 'expo-file-system/legacy';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Line, Text as SvgText, G, Defs, RadialGradient, Stop, Polygon } from 'react-native-svg';
@@ -15,6 +17,7 @@ import { Buffer } from 'buffer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import BackgroundHaptics from "background-haptics";
 import AndroidForegroundService from 'android-foreground-service';
+import { initialWindowMetrics } from 'react-native-safe-area-context';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -34,11 +37,15 @@ const fontScale = (size, factor = 0.5) => size + (scale(size) - size) * factor;
 // Small screen detection for adaptive UI changes
 const IS_SMALL_SCREEN = screenHeight < 750;
 
-// The design margins assume iOS, where the app draws behind the status bar /
-// notch. Android places the app below the status bar, so the same top margin
-// would shift the whole layout down by the bar's height — subtract it there.
-// Zero on iOS: no visual change where the design already works.
-const ANDROID_STATUS_BAR_OFFSET = Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 0;
+// Since SDK 54 (target API 36), Android is edge-to-edge like iOS: the app
+// draws behind the status and navigation bars, so the iOS design margins now
+// apply as-is on Android too. What Android still needs (and iOS does not,
+// since the design already accounts for the notch/home indicator):
+// - a floor on the header margin so the title clears tall status bars
+// - bottom padding so content clears the gesture/3-button navigation bar
+// Both are 0 on iOS: no change where the design already works.
+const ANDROID_TOP_INSET = Platform.OS === 'android' ? (initialWindowMetrics?.insets.top ?? StatusBar.currentHeight ?? 24) : 0;
+const ANDROID_BOTTOM_INSET = Platform.OS === 'android' ? (initialWindowMetrics?.insets.bottom ?? 0) : 0;
 
 ////////////////////////////////////////////////////////////////////////////////
 // 1. STATIC CONFIGURATION //////////////////////////////////////////////////////
@@ -784,7 +791,7 @@ export default function App() {
   const idealCompassSize = Math.min(screenWidth * 0.9, 300);
 
   // 2. Calculate the total height required by all non-compass elements.
-  const pageVerticalPadding = verticalScale(20) * 2;
+  const pageVerticalPadding = verticalScale(20) * 2 + ANDROID_BOTTOM_INSET;
   const headerHeight = styles.header.marginTop + styles.header.marginBottom + styles.header.minHeight;
   const readoutHeight = styles.readout.marginVertical * 2 + fontScale(48) + fontScale(24) + styles.dir.marginTop;
   const gridContainerHeight = styles.gridContainer.marginTop + styles.gridItem.marginBottom + (styles.gridItem.paddingVertical * 2) + fontScale(14) + fontScale(16) + styles.gridValue.marginTop;
@@ -816,12 +823,15 @@ export default function App() {
 
   return (
     <LinearGradient colors={['#0f1a2b', '#253b56']} style={styles.container}>
+      {/* Edge-to-edge Android: transparent status bar over the dark gradient
+          needs light icons. iOS keeps its default appearance. */}
+      {Platform.OS === 'android' && <StatusBar barStyle="light-content" />}
       <ScrollView
         ref={scrollRef}
         pagingEnabled
         showsVerticalScrollIndicator={false}
       >
-        <View style={[styles.page, { height: screenHeight }]}>
+        <View style={[styles.page, { height: screenHeight, paddingBottom: verticalScale(20) + ANDROID_BOTTOM_INSET }]}>
       {/* Header */}
       <View style={styles.header}>
         {!IS_SMALL_SCREEN && <Text style={styles.title}>Sonic Compass</Text>}
@@ -1022,7 +1032,7 @@ export default function App() {
       )}
     </View>
 
-    <View style={[styles.page, { height: screenHeight }]}>
+    <View style={[styles.page, { height: screenHeight, paddingBottom: verticalScale(20) + ANDROID_BOTTOM_INSET }]}>
       <View style={styles.advancedContainer}>
       {!IS_SMALL_SCREEN && (<Text style={styles.advancedTitle}>{advancedTitleText}</Text>)}
         
@@ -1168,8 +1178,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: Math.max(
-      verticalScale(8),
-      (IS_SMALL_SCREEN ? verticalScale(30) : verticalScale(60)) - ANDROID_STATUS_BAR_OFFSET
+      IS_SMALL_SCREEN ? verticalScale(30) : verticalScale(60),
+      ANDROID_TOP_INSET + verticalScale(4)
     ),
     marginBottom: verticalScale(20),
     minHeight: IS_SMALL_SCREEN ? 0 : fontScale(24) * 1.2, // Reserve space to prevent jump
