@@ -2,12 +2,15 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet, View, Text, TouchableOpacity,
   AppState, Dimensions, ScrollView, Modal,
-  Vibration, Platform, PermissionsAndroid, StatusBar
+  Vibration, Platform, PermissionsAndroid, StatusBar,
+  Image, Animated, Easing, Linking
 } from 'react-native';
 import { Audio, InterruptionModeIOS, InterruptionModeAndroid } from 'expo-av';
 import CompassHeading from 'react-native-compass-heading';
 import * as Haptics from 'expo-haptics';
-import * as FileSystem from 'expo-file-system';
+// SDK 54 introduced a new expo-file-system API; the legacy import keeps the
+// writeAsStringAsync/getInfoAsync/cacheDirectory API this app uses
+import * as FileSystem from 'expo-file-system/legacy';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Line, Text as SvgText, G, Defs, RadialGradient, Stop, Polygon } from 'react-native-svg';
@@ -15,6 +18,7 @@ import { Buffer } from 'buffer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import BackgroundHaptics from "background-haptics";
 import AndroidForegroundService from 'android-foreground-service';
+import { initialWindowMetrics } from 'react-native-safe-area-context';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -34,11 +38,15 @@ const fontScale = (size, factor = 0.5) => size + (scale(size) - size) * factor;
 // Small screen detection for adaptive UI changes
 const IS_SMALL_SCREEN = screenHeight < 750;
 
-// The design margins assume iOS, where the app draws behind the status bar /
-// notch. Android places the app below the status bar, so the same top margin
-// would shift the whole layout down by the bar's height — subtract it there.
-// Zero on iOS: no visual change where the design already works.
-const ANDROID_STATUS_BAR_OFFSET = Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 0;
+// Since SDK 54 (target API 36), Android is edge-to-edge like iOS: the app
+// draws behind the status and navigation bars, so the iOS design margins now
+// apply as-is on Android too. What Android still needs (and iOS does not,
+// since the design already accounts for the notch/home indicator):
+// - a floor on the header margin so the title clears tall status bars
+// - bottom padding so content clears the gesture/3-button navigation bar
+// Both are 0 on iOS: no change where the design already works.
+const ANDROID_TOP_INSET = Platform.OS === 'android' ? (initialWindowMetrics?.insets.top ?? StatusBar.currentHeight ?? 24) : 0;
+const ANDROID_BOTTOM_INSET = Platform.OS === 'android' ? (initialWindowMetrics?.insets.bottom ?? 0) : 0;
 
 ////////////////////////////////////////////////////////////////////////////////
 // 1. STATIC CONFIGURATION //////////////////////////////////////////////////////
@@ -58,6 +66,20 @@ const SAMPLE_RATE = 44100;
 const QUESTION_SOUND_DELAY = 1000; // 1 second before directional sound
 const CENTER_GAIN = Math.SQRT1_2; // constant-power pan gain at center (≈0.707)
 const SETTINGS_KEY = 'sonic_compass_settings';
+const ONBOARDING_KEY = 'sonic_compass_onboarding_seen';
+
+// Safe-area insets for the full-screen onboarding modal (covers notch/nav bar
+// on both platforms; the main UI handles its own insets separately)
+const SAFE_TOP = initialWindowMetrics?.insets.top ?? (Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 20);
+const SAFE_BOTTOM = initialWindowMetrics?.insets.bottom ?? 0;
+
+const ONB_IMG = {
+  walker: require('./assets/onboarding/walker.webp'),
+  loop: require('./assets/onboarding/loop.webp'),
+  walk: require('./assets/onboarding/walk.webp'),
+  predict: require('./assets/onboarding/predict.webp'),
+  blob: require('./assets/onboarding/north_blob.png'),
+};
 
 ////////////////////////////////////////////////////////////////////////////////
 // 2. AUDIO HELPERS /////////////////////////////////////////////////////////////
@@ -127,6 +149,189 @@ const writeWav = async (name, makeFloatBuf) => {
 };
 
 ////////////////////////////////////////////////////////////////////////////////
+// 2b. ONBOARDING CAROUSEL /////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+
+// Pulsing, slowly rotating warm-red "North" marker. The sprite is slightly
+// asymmetric so the rotation is visible.
+const NorthBlob = ({ size, style }) => {
+  const pulse = useRef(new Animated.Value(0)).current;
+  const spin = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const p = Animated.loop(Animated.sequence([
+      Animated.timing(pulse, { toValue: 1, duration: 480, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      Animated.timing(pulse, { toValue: 0, duration: 570, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+    ]));
+    const s = Animated.loop(
+      Animated.timing(spin, { toValue: 1, duration: 3500, easing: Easing.linear, useNativeDriver: true })
+    );
+    p.start();
+    s.start();
+    return () => { p.stop(); s.stop(); };
+  }, [pulse, spin]);
+  return (
+    <Animated.Image
+      source={ONB_IMG.blob}
+      style={[{
+        width: size,
+        height: size,
+        transform: [
+          { scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.22] }) },
+          { rotate: spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }) },
+        ],
+      }, style]}
+    />
+  );
+};
+
+// Full-bleed illustrated background with a scrim that keeps bottom text readable
+const OnbScene = ({ img }) => (
+  <View style={StyleSheet.absoluteFill} pointerEvents="none">
+    <Image source={img} style={styles.onbSceneImg} resizeMode="cover" />
+    <LinearGradient
+      colors={['rgba(16,28,48,0.28)', 'rgba(16,28,48,0.10)', 'rgba(16,28,48,0.93)', '#101c30']}
+      locations={[0, 0.3, 0.62, 0.92]}
+      style={StyleSheet.absoluteFill}
+    />
+  </View>
+);
+
+const OnbStep = ({ badge, children }) => (
+  <View style={styles.onbStep}>
+    <View style={styles.onbBadge}><Text style={styles.onbBadgeText}>{badge}</Text></View>
+    <Text style={styles.onbStepText}>{children}</Text>
+  </View>
+);
+
+const ONB_LAST_PAGE = 5;
+
+const OnboardingCarousel = ({ onDone }) => {
+  const [page, setPage] = useState(0);
+  const pagerRef = useRef(null);
+
+  const goNext = () => {
+    if (page >= ONB_LAST_PAGE) {
+      onDone();
+      return;
+    }
+    // set state directly: Android does not fire onMomentumScrollEnd for
+    // programmatic scrolls (the handler still covers finger swipes)
+    const next = page + 1;
+    setPage(next);
+    pagerRef.current?.scrollTo({ x: next * screenWidth, animated: true });
+  };
+
+  return (
+    <LinearGradient colors={['#101c30', '#2b3f5c']} style={styles.onbRoot}>
+      <ScrollView
+        ref={pagerRef}
+        horizontal
+        pagingEnabled
+        bounces={false}
+        showsHorizontalScrollIndicator={false}
+        onMomentumScrollEnd={(e) => setPage(Math.round(e.nativeEvent.contentOffset.x / screenWidth))}
+      >
+        {/* 1 — hook */}
+        <View style={styles.onbSlide}>
+          <View style={styles.onbArt}>
+            <Image source={ONB_IMG.walker} style={styles.onbWalker} resizeMode="contain" />
+            <NorthBlob size={scale(130)} style={styles.onbBlobHook} />
+          </View>
+          <Text style={styles.onbKicker}>SONIC COMPASS</Text>
+          <Text style={styles.onbTitle}>Acquire a new sense.</Text>
+          <Text style={styles.onbBody}>Your brain can learn to feel where North is.</Text>
+          <Text style={styles.onbFine}>🎧 Put on headphones.</Text>
+        </View>
+
+        {/* 2 — how it works */}
+        <View style={styles.onbSlide}>
+          <OnbScene img={ONB_IMG.loop} />
+          <View style={styles.onbPush} />
+          <Text style={styles.onbTitle}>How it works</Text>
+          <View style={styles.onbSteps}>
+            <OnbStep badge="1">A cue sound plays. That’s the question: <Text style={styles.onbBold}>where’s North?</Text></OnbStep>
+            <OnbStep badge="2">You have one second to guess.</OnbStep>
+            <OnbStep badge="3">Then a sound plays <Text style={styles.onbBold}>from where North actually is</Text>. That’s the answer.</OnbStep>
+          </View>
+          <Text style={styles.onbTag}>Predicting the answer is what turns North into a sense.</Text>
+        </View>
+
+        {/* 3 — first: immerse */}
+        <View style={styles.onbSlide}>
+          <OnbScene img={ONB_IMG.walk} />
+          <View style={styles.onbPush} />
+          <Text style={styles.onbTitle}>First: immerse</Text>
+          <View style={styles.onbSteps}>
+            <Text style={styles.onbPara}>Set the frequency to <Text style={styles.onbAccent}>1s</Text> and just walk.</Text>
+            <Text style={styles.onbPara}>Do it for 30 minutes to a couple of hours — over a few days is fine. Lower the frequency over time, as you become used to the feeling.</Text>
+          </View>
+        </View>
+
+        {/* 4 — then: predict */}
+        <View style={styles.onbSlide}>
+          <OnbScene img={ONB_IMG.predict} />
+          <View style={styles.onbPush} />
+          <Text style={styles.onbTitle}>Then: predict</Text>
+          <View style={styles.onbSteps}>
+            <OnbStep badge="2s">Turn on <Text style={styles.onbBold}>Learning mode</Text> — the cue now plays before every answer.</OnbStep>
+            <OnbStep badge="5s">At each cue, anticipate: <Text style={styles.onbBold}>where will the sound come from?</Text></OnbStep>
+            <OnbStep badge="↗">Robustly right, even in new places? Increase the interval.</OnbStep>
+            <OnbStep badge="✓">Until North is simply there — even with the app off.</OnbStep>
+          </View>
+        </View>
+
+        {/* 5 — potential issues */}
+        <View style={styles.onbSlide}>
+          <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} nestedScrollEnabled={true}>
+          <Text style={styles.onbTitle}>Potential issues</Text>
+          <View style={styles.onbFaq}>
+            <Text style={styles.onbFaqText}><Text style={styles.onbFaqQ}>Compass wrong?{'\n'}</Text>Search for compass-calibration instructions for your phone, and check for MagSafe or other metal/magnetic accessories.</Text>
+            <Text style={styles.onbFaqText}><Text style={styles.onbFaqQ}>Annoying sound when crossing North?{'\n'}</Text>Turn on Vibration mode.</Text>
+            <Text style={styles.onbFaqText}><Text style={styles.onbFaqQ}>Sound from a wrong direction?{'\n'}</Text>If you hold the phone straight, the sound comes from the direction of North. Otherwise, you hear the sounds as if you were facing the direction the phone is facing. If you want to keep the phone in a pocket, add an offset in the Advanced settings — don’t forget to reset the offset when you take the phone out.</Text>
+            <Text style={styles.onbFaqText}><Text style={styles.onbFaqQ}>Walking around?{'\n'}</Text>Please don’t look directly at the sun, and use SPF 50+ sunscreen.</Text>
+          </View>
+          </ScrollView>
+        </View>
+
+        {/* 6 — send-off */}
+        <View style={styles.onbSlide}>
+          <View style={styles.onbArt}>
+            <Image source={ONB_IMG.walker} style={styles.onbWalkerSmall} resizeMode="contain" />
+            <NorthBlob size={scale(120)} style={styles.onbBlobEnd} />
+          </View>
+          <Text style={styles.onbTitle}>That’s it.</Text>
+          <Text style={styles.onbBody}>The app keeps working in the background and doesn’t interrupt music. To use it in a pocket, see Advanced settings.</Text>
+          <Text style={styles.onbGhost} onPress={() => Linking.openURL('https://x.com/Mihonarium').catch(() => {})}>
+            Learned to feel North? Please tell <Text style={styles.onbLink}>@Mihonarium</Text> what it feels like.
+          </Text>
+        </View>
+      </ScrollView>
+
+      {page < ONB_LAST_PAGE && (
+        <TouchableOpacity
+          style={styles.onbSkip}
+          onPress={onDone}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Text style={styles.onbSkipText}>Skip</Text>
+        </TouchableOpacity>
+      )}
+
+      <View style={styles.onbFooter}>
+        <TouchableOpacity style={styles.onbBtn} onPress={goNext}>
+          <Text style={styles.onbBtnText}>{page >= ONB_LAST_PAGE ? 'Start walking' : 'Next'}</Text>
+        </TouchableOpacity>
+        <View style={styles.onbDots}>
+          {Array.from({ length: ONB_LAST_PAGE + 1 }).map((_, i) => (
+            <View key={i} style={[styles.onbDot, i === page && styles.onbDotOn]} />
+          ))}
+        </View>
+      </View>
+    </LinearGradient>
+  );
+};
+
+////////////////////////////////////////////////////////////////////////////////
 // 3. MAIN COMPONENT ////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 export default function App() {
@@ -142,6 +347,7 @@ export default function App() {
   const [calibrating, setCalibrating] = useState(false);
   const [vibrationMode, setVibrationMode] = useState(false);
   const [notificationsDenied, setNotificationsDenied] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   // ----- REFS ----------------------------------------------------------------
   const rotRef = useRef(0);
@@ -696,6 +902,18 @@ export default function App() {
     initializeApp();
   }, []);
 
+  // First launch: show the intro carousel until it has been dismissed once
+  useEffect(() => {
+    AsyncStorage.getItem(ONBOARDING_KEY).then(value => {
+      if (value !== '1') setShowOnboarding(true);
+    }).catch(() => {});
+  }, []);
+
+  const dismissOnboarding = () => {
+    setShowOnboarding(false);
+    AsyncStorage.setItem(ONBOARDING_KEY, '1').catch(() => {});
+  };
+
   // Keep ref in sync with latest vibration mode
   useEffect(() => {
     vibrationModeRef.current = vibrationMode;
@@ -784,7 +1002,7 @@ export default function App() {
   const idealCompassSize = Math.min(screenWidth * 0.9, 300);
 
   // 2. Calculate the total height required by all non-compass elements.
-  const pageVerticalPadding = verticalScale(20) * 2;
+  const pageVerticalPadding = verticalScale(20) * 2 + ANDROID_BOTTOM_INSET;
   const headerHeight = styles.header.marginTop + styles.header.marginBottom + styles.header.minHeight;
   const readoutHeight = styles.readout.marginVertical * 2 + fontScale(48) + fontScale(24) + styles.dir.marginTop;
   const gridContainerHeight = styles.gridContainer.marginTop + styles.gridItem.marginBottom + (styles.gridItem.paddingVertical * 2) + fontScale(14) + fontScale(16) + styles.gridValue.marginTop;
@@ -816,12 +1034,15 @@ export default function App() {
 
   return (
     <LinearGradient colors={['#0f1a2b', '#253b56']} style={styles.container}>
+      {/* Edge-to-edge Android: transparent status bar over the dark gradient
+          needs light icons. iOS keeps its default appearance. */}
+      {Platform.OS === 'android' && <StatusBar barStyle="light-content" />}
       <ScrollView
         ref={scrollRef}
         pagingEnabled
         showsVerticalScrollIndicator={false}
       >
-        <View style={[styles.page, { height: screenHeight }]}>
+        <View style={[styles.page, { height: screenHeight, paddingBottom: verticalScale(20) + ANDROID_BOTTOM_INSET }]}>
       {/* Header */}
       <View style={styles.header}>
         {!IS_SMALL_SCREEN && <Text style={styles.title}>Sonic Compass</Text>}
@@ -1022,7 +1243,7 @@ export default function App() {
       )}
     </View>
 
-    <View style={[styles.page, { height: screenHeight }]}>
+    <View style={[styles.page, { height: screenHeight, paddingBottom: verticalScale(20) + ANDROID_BOTTOM_INSET }]}>
       <View style={styles.advancedContainer}>
       {!IS_SMALL_SCREEN && (<Text style={styles.advancedTitle}>{advancedTitleText}</Text>)}
         
@@ -1098,6 +1319,16 @@ export default function App() {
             </TouchableOpacity>
           )}
         </View>
+
+        <TouchableOpacity
+          style={styles.viewIntroButton}
+          onPress={() => {
+            setShowOnboarding(true);
+            Haptics.selectionAsync();
+          }}
+        >
+          <Text style={styles.viewIntroText}>View intro</Text>
+        </TouchableOpacity>
       </View>
 
       <TouchableOpacity style={styles.advancedToggle} onPress={scrollToTop}>
@@ -1143,6 +1374,17 @@ export default function App() {
           </View>
         </TouchableOpacity>
       </Modal>
+
+      {/* Onboarding carousel (first launch; replayable from Advanced) */}
+      <Modal
+        visible={showOnboarding}
+        animationType="fade"
+        statusBarTranslucent={true}
+        navigationBarTranslucent={true}
+        onRequestClose={dismissOnboarding}
+      >
+        <OnboardingCarousel onDone={dismissOnboarding} />
+      </Modal>
       </ScrollView>
     </LinearGradient>
   );
@@ -1151,6 +1393,11 @@ export default function App() {
 ////////////////////////////////////////////////////////////////////////////////
 // 4. STYLES ////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
+// One shared line box for onboarding step rows: the badge is exactly this
+// tall, so it spans the first text line precisely on both platforms (iOS
+// bottom-aligns glyphs in inflated line boxes; offset math is not portable)
+const ONB_STEP_LINE = Math.round(fontScale(19) * 1.42);
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -1168,8 +1415,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: Math.max(
-      verticalScale(8),
-      (IS_SMALL_SCREEN ? verticalScale(30) : verticalScale(60)) - ANDROID_STATUS_BAR_OFFSET
+      IS_SMALL_SCREEN ? verticalScale(30) : verticalScale(60),
+      ANDROID_TOP_INSET + verticalScale(4)
     ),
     marginBottom: verticalScale(20),
     minHeight: IS_SMALL_SCREEN ? 0 : fontScale(24) * 1.2, // Reserve space to prevent jump
@@ -1401,5 +1648,208 @@ const styles = StyleSheet.create({
     // status never overlaps the Advanced toggle above it
     flexGrow: 1,
     minHeight: verticalScale(12),
+  },
+  viewIntroButton: {
+    width: '100%',
+    paddingVertical: verticalScale(10),
+    borderRadius: scale(8),
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.3)',
+    alignItems: 'center',
+  },
+  viewIntroText: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: fontScale(14),
+  },
+
+  // ----- ONBOARDING CAROUSEL -------------------------------------------------
+  // Sizes are in the app's 428pt design space (the preview mockups were 300px
+  // frames — everything here is the preview value x1.43)
+  onbRoot: {
+    flex: 1,
+  },
+  onbSlide: {
+    width: screenWidth,
+    flex: 1,
+    paddingHorizontal: scale(36),
+    paddingTop: SAFE_TOP + verticalScale(50),
+    // clears the absolutely-positioned footer (button + dots) on every screen
+    paddingBottom: SAFE_BOTTOM + verticalScale(150),
+  },
+  onbSceneImg: {
+    width: '100%',
+    height: '100%',
+  },
+  onbArt: {
+    flex: 1,
+    minHeight: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  onbWalker: {
+    width: '84%',
+    height: '94%',
+    maxHeight: verticalScale(440),
+  },
+  onbWalkerSmall: {
+    width: '68%',
+    height: '86%',
+    maxHeight: verticalScale(360),
+  },
+  onbBlobHook: {
+    position: 'absolute',
+    top: '4%',
+    right: '2%',
+  },
+  onbBlobEnd: {
+    position: 'absolute',
+    top: '0%',
+    right: '4%',
+  },
+  onbPush: {
+    flex: 1,
+  },
+  onbKicker: {
+    color: 'rgba(255,255,255,0.55)',
+    fontSize: fontScale(16),
+    letterSpacing: 3.4,
+    marginBottom: verticalScale(11),
+  },
+  onbTitle: {
+    color: '#fff',
+    fontSize: fontScale(34),
+    fontWeight: '700',
+    lineHeight: fontScale(34) * 1.2,
+  },
+  onbBody: {
+    color: 'rgba(255,255,255,0.9)',
+    fontSize: fontScale(20),
+    lineHeight: fontScale(20) * 1.5,
+    marginTop: verticalScale(11),
+  },
+  onbFine: {
+    color: 'rgba(255,255,255,0.72)',
+    fontSize: fontScale(18),
+    marginTop: verticalScale(14),
+  },
+  onbSteps: {
+    marginTop: verticalScale(17),
+    gap: verticalScale(14),
+  },
+  onbStep: {
+    flexDirection: 'row',
+    gap: scale(14),
+    alignItems: 'flex-start',
+  },
+  onbBadge: {
+    width: scale(51),
+    height: ONB_STEP_LINE,
+    borderRadius: ONB_STEP_LINE / 2,
+    backgroundColor: 'rgba(59,130,246,0.3)',
+    borderWidth: 1,
+    borderColor: 'rgba(124,196,255,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  onbBadgeText: {
+    color: '#fff',
+    fontSize: fontScale(16),
+    fontWeight: '700',
+  },
+  onbStepText: {
+    flex: 1,
+    color: 'rgba(255,255,255,0.92)',
+    fontSize: fontScale(19),
+    lineHeight: ONB_STEP_LINE,
+    includeFontPadding: false,
+  },
+  onbPara: {
+    // like onbStepText but for bare paragraphs in a column (flex:1 would
+    // collapse a Text to zero height outside a row)
+    color: 'rgba(255,255,255,0.92)',
+    fontSize: fontScale(19),
+    lineHeight: ONB_STEP_LINE,
+    includeFontPadding: false,
+  },
+  onbBold: {
+    color: '#fff',
+    fontWeight: '700',
+  },
+  onbAccent: {
+    color: '#9ec8f5',
+    fontWeight: '700',
+  },
+  onbTag: {
+    color: '#9ec8f5',
+    fontSize: fontScale(19),
+    lineHeight: fontScale(19) * 1.4,
+    marginTop: verticalScale(17),
+  },
+  onbFaq: {
+    marginTop: verticalScale(17),
+    gap: verticalScale(16),
+  },
+  onbFaqText: {
+    color: 'rgba(255,255,255,0.88)',
+    fontSize: fontScale(16),
+    lineHeight: fontScale(16) * 1.5,
+  },
+  onbFaqQ: {
+    color: '#fff',
+    fontWeight: '700',
+  },
+  onbGhost: {
+    color: 'rgba(255,255,255,0.65)',
+    fontSize: fontScale(18),
+    lineHeight: fontScale(18) * 1.5,
+    textAlign: 'center',
+    marginTop: verticalScale(20),
+  },
+  onbLink: {
+    color: '#9ec8f5',
+    fontWeight: '600',
+  },
+  onbSkip: {
+    position: 'absolute',
+    top: SAFE_TOP + verticalScale(10),
+    right: scale(26),
+    zIndex: 5,
+    padding: scale(6),
+  },
+  onbSkipText: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: fontScale(19),
+  },
+  onbFooter: {
+    position: 'absolute',
+    left: scale(34),
+    right: scale(34),
+    bottom: SAFE_BOTTOM + verticalScale(16),
+  },
+  onbBtn: {
+    backgroundColor: '#3B82F6',
+    borderRadius: scale(20),
+    paddingVertical: verticalScale(18),
+    alignItems: 'center',
+  },
+  onbBtnText: {
+    color: '#fff',
+    fontSize: fontScale(21),
+    fontWeight: '600',
+  },
+  onbDots: {
+    flexDirection: 'row',
+    gap: scale(9),
+    justifyContent: 'center',
+    paddingTop: verticalScale(14),
+  },
+  onbDot: {
+    width: scale(9),
+    height: scale(9),
+    borderRadius: scale(5),
+    backgroundColor: 'rgba(255,255,255,0.28)',
+  },
+  onbDotOn: {
+    backgroundColor: '#fff',
   },
 });
