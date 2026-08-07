@@ -70,6 +70,12 @@ eas submit --platform ios
 ### Audio file caching
 - `writeWav(name, makeFloatBuf)` takes a **thunk** and caches generated WAVs in `FileSystem.cacheDirectory`, keyed by `SOUND_CACHE_VERSION` — bump that constant whenever sound generation changes (frequencies, durations, pan law) or stale cached files will be reused
 
+### Google-Play-Services-free builds
+- `expo-dev-client` is deliberately NOT in package.json (PR #53): its Android dev-launcher is not debug-gated and pulls GMS + MLKit into release builds. The default dependency tree is GMS-free so source builds work on de-Googled devices.
+- **Development builds: use `npm run dev:build` (optionally `npm run dev:build ios`)**, NOT `eas build --profile development` directly — eas-cli refuses a dev-profile build without expo-dev-client installed locally. The wrapper (`scripts/eas-dev-build.sh`) temporarily installs it, submits (the project uploads with it, so the EAS builder gets it too), then restores package.json/lockfile/node_modules even on failure.
+- For a local dev-launcher build, run `npx expo install expo-dev-client` first and don't commit the package.json change. Plain `npx expo run:android` debug builds work without it (Metro still connects; you just lose the launcher UI).
+- `expo-location` was removed as unused; don't re-add location deps without checking the manifest for GMS fallout.
+
 ## General Notes
 
 - No test suite exists; changes must be verified manually on device
