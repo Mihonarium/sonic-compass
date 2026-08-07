@@ -8,6 +8,8 @@ React Native (Expo SDK 54, RN 0.81) app that helps users develop an intuitive se
 
 **Single-file app**: All UI and logic lives in `App.js` (~1200 lines). No router, no state management library.
 
+**Onboarding**: a six-slide carousel (`OnboardingCarousel` in App.js, assets in `assets/onboarding/`) shown as a full-screen Modal on first launch (AsyncStorage key `sonic_compass_onboarding_seen`), skippable, replayable via Advanced → View intro. Design/copy iterated at data.claude.ms/sonic-onboarding/ (spec in `docs/superpowers/specs/2026-08-07-onboarding-carousel-design.md`). Uses safe-area constants `SAFE_TOP`/`SAFE_BOTTOM` from `initialWindowMetrics`.
+
 **Native module**: `background-haptics/` is a local Expo module (Swift, iOS-only native code) that provides haptic feedback when the app is backgrounded, using `AudioServicesPlaySystemSound`. On Android, the module falls back to a no-op; background vibration uses `Vibration.vibrate()` directly instead.
 
 ## Key Files

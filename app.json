@@ -15,7 +15,8 @@
       "assets/icon.png",
       "assets/splash.png",
       "assets/adaptive-icon.png",
-      "assets/favicon.png"
+      "assets/favicon.png",
+      "assets/onboarding/*"
     ],
     "ios": {
       "supportsTablet": false,
