@@ -49,7 +49,7 @@
         "android.permission.RECORD_AUDIO"
       ],
       "package": "ms.contact.compass",
-      "versionCode": 11,
+      "versionCode": 12,
       "edgeToEdgeEnabled": true
     },
     "web": {

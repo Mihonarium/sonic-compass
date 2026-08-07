@@ -1393,6 +1393,11 @@ export default function App() {
 ////////////////////////////////////////////////////////////////////////////////
 // 4. STYLES ////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
+// One shared line box for onboarding step rows: the badge is exactly this
+// tall, so it spans the first text line precisely on both platforms (iOS
+// bottom-aligns glyphs in inflated line boxes; offset math is not portable)
+const ONB_STEP_LINE = Math.round(fontScale(19) * 1.42);
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -1738,15 +1743,13 @@ const styles = StyleSheet.create({
   },
   onbBadge: {
     width: scale(51),
-    height: scale(34),
-    borderRadius: scale(17),
+    height: ONB_STEP_LINE,
+    borderRadius: ONB_STEP_LINE / 2,
     backgroundColor: 'rgba(59,130,246,0.3)',
     borderWidth: 1,
     borderColor: 'rgba(124,196,255,0.55)',
     alignItems: 'center',
     justifyContent: 'center',
-    // center the badge on the first line of the step text
-    marginTop: (fontScale(19) * 1.5 - scale(34)) / 2,
   },
   onbBadgeText: {
     color: '#fff',
@@ -1757,14 +1760,16 @@ const styles = StyleSheet.create({
     flex: 1,
     color: 'rgba(255,255,255,0.92)',
     fontSize: fontScale(19),
-    lineHeight: fontScale(19) * 1.5,
+    lineHeight: ONB_STEP_LINE,
+    includeFontPadding: false,
   },
   onbPara: {
     // like onbStepText but for bare paragraphs in a column (flex:1 would
     // collapse a Text to zero height outside a row)
     color: 'rgba(255,255,255,0.92)',
     fontSize: fontScale(19),
-    lineHeight: fontScale(19) * 1.5,
+    lineHeight: ONB_STEP_LINE,
+    includeFontPadding: false,
   },
   onbBold: {
     color: '#fff',
