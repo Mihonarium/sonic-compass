@@ -4,7 +4,7 @@ Sonic Compass is a tool for perceptual learning. It uses spatial audio and predi
 
 You'll continuously be able to feel that North is *right there*.
 
-[<img width="220" height="75" alt="image" src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" />](https://apps.apple.com/gb/app/sonic-compass/id6746952992)
+[<img width="220" height="75" alt="Download on the App Store" src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" />](https://apps.apple.com/gb/app/sonic-compass/id6746952992) [<img height="90" alt="Get it on Google Play" src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" />](https://play.google.com/store/apps/details?id=ms.contact.compass)
 
 ## How It Works: A Feedback Loop for Your Brain
 
