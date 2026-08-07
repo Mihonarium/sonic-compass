@@ -214,7 +214,11 @@ const OnboardingCarousel = ({ onDone }) => {
       onDone();
       return;
     }
-    pagerRef.current?.scrollTo({ x: (page + 1) * screenWidth, animated: true });
+    // set state directly: Android does not fire onMomentumScrollEnd for
+    // programmatic scrolls (the handler still covers finger swipes)
+    const next = page + 1;
+    setPage(next);
+    pagerRef.current?.scrollTo({ x: next * screenWidth, animated: true });
   };
 
   return (
@@ -278,7 +282,7 @@ const OnboardingCarousel = ({ onDone }) => {
 
         {/* 5 — potential issues */}
         <View style={styles.onbSlide}>
-          <ScrollView showsVerticalScrollIndicator={false} nestedScrollEnabled={true}>
+          <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} nestedScrollEnabled={true}>
           <Text style={styles.onbTitle}>Potential issues</Text>
           <View style={styles.onbFaq}>
             <Text style={styles.onbFaqText}><Text style={styles.onbFaqQ}>Compass wrong?{'\n'}</Text>Search for compass-calibration instructions for your phone, and check for MagSafe or other metal/magnetic accessories.</Text>
@@ -1376,6 +1380,7 @@ export default function App() {
         visible={showOnboarding}
         animationType="fade"
         statusBarTranslucent={true}
+        navigationBarTranslucent={true}
         onRequestClose={dismissOnboarding}
       >
         <OnboardingCarousel onDone={dismissOnboarding} />
